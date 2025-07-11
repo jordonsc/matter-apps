@@ -1,0 +1,11 @@
+# IDE
+.idea
+.vscode
+
+# Always ensure required SDK config are in a sdkconfig.defaults file
+sdkconfig
+sdkconfig.old
+sdk-location
+*/build
+*/managed_components
+*/bin

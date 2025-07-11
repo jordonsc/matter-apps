@@ -1,0 +1,83 @@
+#!/bin/bash
+
+# This script sets up the environment for ESP-IDF and ESP-Matter development.
+# 
+# IMPORTANT: This script must be sourced, not executed directly!
+# Usage: source ./init  (or: . ./init)
+
+# Check if the script is being sourced or executed
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    echo "ERROR: This script must be sourced, not executed directly!"
+    echo "Usage: . ./init"
+    exit 1
+fi
+
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Check for sdk-location file, fallback to sdk-location.default
+SDK_LOCATION_FILE="$SCRIPT_DIR/sdk-location"
+if [ ! -f "$SDK_LOCATION_FILE" ]; then
+    SDK_LOCATION_FILE="$SCRIPT_DIR/sdk-location.default"
+fi
+
+if [ ! -f "$SDK_LOCATION_FILE" ]; then
+    echo "Error: Neither sdk-location nor sdk-location.default file found!"
+    exit 1
+fi
+
+echo "SDK location file: $SDK_LOCATION_FILE"
+
+# Extract esp-idf and esp-matter paths
+ESP_IDF_PATH=$(grep "^esp-idf:" "$SDK_LOCATION_FILE" | cut -d':' -f2 | xargs)
+ESP_MATTER_PATH=$(grep "^esp-matter:" "$SDK_LOCATION_FILE" | cut -d':' -f2 | xargs)
+
+if [ -z "$ESP_IDF_PATH" ]; then
+    echo "Error: esp-idf path not found in $SDK_LOCATION_FILE"
+    exit 1
+fi
+
+if [ -z "$ESP_MATTER_PATH" ]; then
+    echo "Error: esp-matter path not found in $SDK_LOCATION_FILE"
+    exit 1
+fi
+
+# Convert relative paths to absolute paths
+if [[ ! "$ESP_IDF_PATH" = /* ]]; then
+    ESP_IDF_PATH="$SCRIPT_DIR/$ESP_IDF_PATH"
+fi
+
+if [[ ! "$ESP_MATTER_PATH" = /* ]]; then
+    ESP_MATTER_PATH="$SCRIPT_DIR/$ESP_MATTER_PATH"
+fi
+
+echo "ESP-IDF path:      $ESP_IDF_PATH"
+echo "ESP-Matter path:   $ESP_MATTER_PATH"
+echo
+export ESP_MATTER_PATH="$ESP_MATTER_PATH"
+
+# Source export.sh from esp-idf
+ESP_IDF_EXPORT="$ESP_IDF_PATH/export.sh"
+if [ -f "$ESP_IDF_EXPORT" ]; then
+    echo
+    echo "-- Invoking ESP-IDF environment --"
+    echo
+    source "$ESP_IDF_EXPORT"
+else
+    echo "Warning: ESP-IDF export script not found at $ESP_IDF_EXPORT"
+fi
+
+# Source export.sh from esp-matter
+ESP_MATTER_EXPORT="$ESP_MATTER_PATH/export.sh"
+if [ -f "$ESP_MATTER_EXPORT" ]; then
+    echo -e "\n"
+    echo "-- Invoking ESP-Matter environment --"
+    source "$ESP_MATTER_EXPORT"
+else
+    echo "Warning: ESP-Matter export script not found at $ESP_MATTER_EXPORT"
+fi
+
+echo
+echo "Environment setup complete!"
+echo "Note: Environment variables are now available in your current shell."
+echo
