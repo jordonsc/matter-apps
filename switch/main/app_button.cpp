@@ -5,7 +5,7 @@
 #include <esp_matter.h>
 #include <app-common/zap-generated/attributes/Accessors.h>
 
-#include <app_priv.h>
+#include <app_button.h>
 #include <iot_button.h>
 #include <button_gpio.h>
 
@@ -15,7 +15,7 @@ using namespace esp_matter::cluster;
 
 static const char *TAG = "app_driver";
 
-esp_err_t app_driver_attribute_update(app_driver_handle_t driver_handle, uint16_t endpoint_id, uint32_t cluster_id,
+esp_err_t button_attribute_update(btn_handle_t driver_handle, uint16_t endpoint_id, uint32_t cluster_id,
                                       uint32_t attribute_id, esp_matter_attr_val_t *val) 
 {
     return ESP_OK;
@@ -27,7 +27,7 @@ static void app_driver_button_switch_latched(void *arg, void *data)
 {
     ESP_LOGI(TAG, "Switch lached pressed");
     gpio_button * button = (gpio_button*)data;
-    int switch_endpoint_id = (button != NULL) ? get_endpoint(button) : 1;
+    int switch_endpoint_id = (button != NULL) ? get_button_endpoint(button) : 1;
     // Press moves Position from 0 (idle) to 1 (press) and vice versa
     uint8_t newPosition = (latching_switch_previous_position == 1) ? 0 : 1;
     latching_switch_previous_position = newPosition;
@@ -47,7 +47,7 @@ static void app_driver_button_switch_latched(void *arg, void *data)
 static void button_on_down(void *arg, void *data)
 {
     gpio_button * button = (gpio_button*)data;
-    int switch_endpoint_id = (button != NULL) ? get_endpoint(button) : 1;
+    int switch_endpoint_id = (button != NULL) ? get_button_endpoint(button) : 1;
     ESP_LOGI(TAG, "Button [%d]: DOWN", button->GPIO_PIN_VALUE);
 
     uint8_t pos = 1;
@@ -57,7 +57,7 @@ static void button_on_down(void *arg, void *data)
 
         // Send initial press event
         switch_cluster::event::send_initial_press(switch_endpoint_id, pos);
-    });
+   });
 }
 
 /**
@@ -66,13 +66,16 @@ static void button_on_down(void *arg, void *data)
 static void button_on_up(void *arg, void *data)
 {
     gpio_button * button = (gpio_button*)data;
-    int switch_endpoint_id = (button != NULL) ? get_endpoint(button) : 1;
+    int switch_endpoint_id = (button != NULL) ? get_button_endpoint(button) : 1;
     ESP_LOGI(TAG, "Button [%d]: UP", button->GPIO_PIN_VALUE);
 
     uint8_t pos = 0;
     chip::DeviceLayer::SystemLayer().ScheduleLambda([switch_endpoint_id, pos]() {
         // Device the endpoint position to 0 (released)
         chip::app::Clusters::Switch::Attributes::CurrentPosition::Set(switch_endpoint_id, pos);
+
+        // Send short release event
+        switch_cluster::event::send_short_release(switch_endpoint_id, pos);
     });
 }
 
@@ -82,7 +85,7 @@ static void button_on_up(void *arg, void *data)
 static void button_on_single_click(void *arg, void *data)
 {
     gpio_button * button = (gpio_button*)data;
-    int switch_endpoint_id = (button != NULL) ? get_endpoint(button) : 1;
+    int switch_endpoint_id = (button != NULL) ? get_button_endpoint(button) : 1;
     ESP_LOGI(TAG, "Button [%d]: SINGLE-CLICK", button->GPIO_PIN_VALUE);
 
     uint8_t pos = 0;
@@ -98,7 +101,7 @@ static void button_on_single_click(void *arg, void *data)
 static void button_on_double_click(void *arg, void *data)
 {
     gpio_button * button = (gpio_button*)data;
-    int switch_endpoint_id = (button != NULL) ? get_endpoint(button) : 1;
+    int switch_endpoint_id = (button != NULL) ? get_button_endpoint(button) : 1;
     ESP_LOGI(TAG, "Button [%d]: DOUBLE-CLICK", button->GPIO_PIN_VALUE);
 
     uint8_t pos = 0;
@@ -114,7 +117,7 @@ static void button_on_double_click(void *arg, void *data)
 static void button_on_long_press_start(void *arg, void *data)
 {
     gpio_button * button = (gpio_button*)data;
-    int switch_endpoint_id = (button != NULL) ? get_endpoint(button) : 1;
+    int switch_endpoint_id = (button != NULL) ? get_button_endpoint(button) : 1;
     ESP_LOGI(TAG, "Button [%d]: LONG-PRESS BEGIN", button->GPIO_PIN_VALUE);
 
     uint8_t pos = 0;
@@ -130,7 +133,7 @@ static void button_on_long_press_start(void *arg, void *data)
 static void button_on_long_press_end(void *arg, void *data)
 {
     gpio_button * button = (gpio_button*)data;
-    int switch_endpoint_id = (button != NULL) ? get_endpoint(button) : 1;
+    int switch_endpoint_id = (button != NULL) ? get_button_endpoint(button) : 1;
     ESP_LOGI(TAG, "Button [%d]: LONG-PRESS END", button->GPIO_PIN_VALUE);
 
     uint8_t pos = 0;
@@ -147,7 +150,7 @@ static void button_on_long_press_end(void *arg, void *data)
  * 
  * This will create an iot_button from a gpio_button.
  */
-app_driver_handle_t app_driver_button_init(gpio_button* button)
+btn_handle_t button_init(gpio_button* button)
 {
     // Initialize button
     button_handle_t handle = NULL;
@@ -184,5 +187,5 @@ app_driver_handle_t app_driver_button_init(gpio_button* button)
 
 #endif
 
-    return (app_driver_handle_t)handle;
+    return (btn_handle_t)handle;
 }

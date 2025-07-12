@@ -8,7 +8,7 @@
 
 #include <common_macros.h>
 #include <enable_esp_insights.h>
-#include <app_priv.h>
+#include <app_button.h>
 #include <app_reset.h>
 #include <app/util/attribute-storage.h>
 
@@ -111,8 +111,8 @@ static esp_err_t app_attribute_update_cb(attribute::callback_type_t type, uint16
 
     if (type == PRE_UPDATE) {
         /* Driver update */
-        app_driver_handle_t driver_handle = (app_driver_handle_t)priv_data;
-        err = app_driver_attribute_update(driver_handle, endpoint_id, cluster_id, attribute_id, val);
+        btn_handle_t driver_handle = (btn_handle_t)priv_data;
+        err = button_attribute_update(driver_handle, endpoint_id, cluster_id, attribute_id, val);
     }
 
     return err;
@@ -139,7 +139,7 @@ static esp_err_t create_button(struct gpio_button* button, node_t* node)
     }
 
     // Initialize driver
-    app_driver_handle_t button_handle = app_driver_button_init(button);
+    btn_handle_t button_handle = button_init(button);
 
     // Create switch config
     generic_switch::config_t switch_config;
@@ -232,7 +232,7 @@ static esp_err_t create_button(int pin_number, node_t* node)
  *
  * @return Endpoint ID if found, -1 if not found.
  */
-int get_endpoint(gpio_button* button) {
+int get_button_endpoint(gpio_button* button) {
     for (int i = 0; i < configured_buttons; i++) {
         if (button_list[i].button == button) {
             return button_list[i].endpoint;

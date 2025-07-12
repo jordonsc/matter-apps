@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.31)
 
 message(IDF_VERSION ": $ENV{IDF_VERSION}; idf version number: ${IDF_VERSION_MAJOR}.${IDF_VERSION_MINOR}.${IDF_VERSION_PATCH}")
 get_filename_component(SDKCONFIG_COMMON_DIR "${CMAKE_CURRENT_SOURCE_DIR}/sdkconfig.defaults" ABSOLUTE)

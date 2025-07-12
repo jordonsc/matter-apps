@@ -184,12 +184,12 @@ dependencies:
       type: service
     version: 1.8.2
   espressif/rmaker_common:
-    component_hash: f1208cd1951f9308fd838d7af12de3522206cc77079f268629cd74bf9c6daea7
+    component_hash: f8e531264d62cf01ea1bcc80d7436e09e5819132056ca22c3869f5b0e2000c13
     dependencies: []
     source:
       registry_url: https://components.espressif.com
       type: service
-    version: 1.4.11
+    version: 1.4.12
   idf:
     source:
       type: idf

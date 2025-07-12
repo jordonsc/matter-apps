@@ -19,9 +19,9 @@ struct button_endpoint
     uint16_t endpoint;
 };
 
-extern int get_endpoint(gpio_button* button);
+extern int get_button_endpoint(gpio_button* button);
 
-typedef void* app_driver_handle_t;
+typedef void* btn_handle_t;
 
 /** Initialize the button driver
  *
@@ -32,9 +32,10 @@ typedef void* app_driver_handle_t;
  * @return Handle on success.
  * @return NULL in case of failure.
  */
-app_driver_handle_t app_driver_button_init(gpio_button *button = NULL);
+btn_handle_t button_init(gpio_button *button = NULL);
 
-/** Driver Update
+/** 
+ * Driver Update
  *
  * This API should be called to update the driver for the attribute being updated.
  * This is usually called from the common `app_attribute_update_cb()`.
@@ -47,7 +48,7 @@ app_driver_handle_t app_driver_button_init(gpio_button *button = NULL);
  * @return ESP_OK on success.
  * @return error in case of failure.
  */
-esp_err_t app_driver_attribute_update(app_driver_handle_t driver_handle, uint16_t endpoint_id, uint32_t cluster_id,
+esp_err_t button_attribute_update(btn_handle_t driver_handle, uint16_t endpoint_id, uint32_t cluster_id,
                                       uint32_t attribute_id, esp_matter_attr_val_t *val);
 
 #if CHIP_DEVICE_CONFIG_ENABLE_THREAD
