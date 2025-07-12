@@ -7,17 +7,31 @@
 	      Define type of switch is latching or momentary.
 
 	  config GENERIC_SWITCH_TYPE_LATCHING
-	      bool "Generic Switch Type Latching"
+	      bool "[LS] Latching switch"
+
 	  config GENERIC_SWITCH_TYPE_MOMENTARY
-	      bool "Generic Switch Type Momentary"
+	      bool "[AS] Momentary action-switch with optional double-click and long-press"
+		  
 	endchoice
     
-	config MAX_CONFIGURABLE_BUTTONS
-        int "Maximum physical configurable buttons"
-        default 5
-        range 1 5
-
 	config BUTTON_GPIO_LIST
-        string "Comma delimited list of GPIO numbers to add switchs"
-        default "0"
+        string "Comma delimited list of GPIO numbers to add switches"
+        default "9"
+
+	config BUTTON_COUNT
+        int "Numer of items in GPIO list"
+        default 1
+        range 1 50
+
+	config BUTTON_ENABLE_DOUBLE_CLICK
+        bool "Enable double-clicking of momentary buttons"
+
+	config BUTTON_ENABLE_LONG_PRESS
+        bool "Enable long-pressing of momentary buttons"
+
+	config BUTTON_LONG_PRESS_TIME
+        int "Time in ms for a button-hold to be considered a long-press"
+        default 750
+        range 1 10000
+
 endmenu

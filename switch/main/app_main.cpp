@@ -19,8 +19,8 @@
 static const char *TAG = "app_main";
 
 static uint16_t configured_buttons = 0;
-static button_endpoint button_list[CONFIG_MAX_CONFIGURABLE_BUTTONS];
-static struct gpio_button button_storage[CONFIG_MAX_CONFIGURABLE_BUTTONS];
+static button_endpoint button_list[CONFIG_BUTTON_COUNT];
+static struct gpio_button button_storage[CONFIG_BUTTON_COUNT];
 
 using namespace esp_matter;
 using namespace esp_matter::attribute;
@@ -128,18 +128,23 @@ static esp_err_t app_attribute_update_cb(attribute::callback_type_t type, uint16
  * @param[in] node Pointer to the Matter node.
  *
  * @return ESP_OK on success.
+ * @return ESP_ERR_NO_MEM if button storage exceeded.
  * @return ESP_FAIL if node or endpoint creation fails.
  */
 static esp_err_t create_button(struct gpio_button* button, node_t* node)
 {
-    esp_err_t err = ESP_OK;
+    if (configured_buttons >= CONFIG_BUTTON_COUNT) {
+        ESP_LOGE(TAG, "Button storage full. Cannot create more buttons. Max: %d", CONFIG_BUTTON_COUNT);
+        return ESP_ERR_NO_MEM;
+    }
 
-    /* Initialize driver */
+    // Initialize driver
     app_driver_handle_t button_handle = app_driver_button_init(button);
 
-    /* Create a new endpoint. */
+    // Create switch config
     generic_switch::config_t switch_config;
     switch_config.switch_cluster.feature_flags = 
+
 #if CONFIG_GENERIC_SWITCH_TYPE_LATCHING
     cluster::switch_cluster::feature::latching_switch::get_id();
 #endif
@@ -148,52 +153,50 @@ static esp_err_t create_button(struct gpio_button* button, node_t* node)
     cluster::switch_cluster::feature::momentary_switch::get_id();
 #endif
 
+    // Create switch endpoint with the switch cluster configuration.
     endpoint_t *endpoint = generic_switch::create(node, &switch_config, ENDPOINT_FLAG_NONE, button_handle);
-
-    cluster_t* descriptor = cluster::get(endpoint,Descriptor::Id);
+    static uint16_t generic_switch_endpoint_id = endpoint::get_id(endpoint);
+    
+    cluster_t* descriptor = cluster::get(endpoint, Descriptor::Id);
     descriptor::feature::taglist::add(descriptor);
 
-    /* These node and endpoint handles can be used to create/add other endpoints and clusters. */
+    ESP_LOGI(TAG, "Generic Switch created with endpoint_id %d", generic_switch_endpoint_id);
+
+    // These node and endpoint handles can be used to create/add other endpoints and clusters
     if (!node || !endpoint)
     {
         ESP_LOGE(TAG, "Matter node creation failed");
-        err = ESP_FAIL;
-        return err;
+        return ESP_FAIL;
     }
 
-    // Add the button to the list of configured buttons.
-    for (int i = 0; i < configured_buttons; i++) {
-        if (button_list[i].button == button) {
-            break;
-        }
-    }
-
-    // Check for maximum physical buttons that can be configured.
-    if (configured_buttons <CONFIG_MAX_CONFIGURABLE_BUTTONS) {
-        button_list[configured_buttons].button = button;
-        button_list[configured_buttons].endpoint = endpoint::get_id(endpoint);
-        configured_buttons++;
-    } else {
-        ESP_LOGI(TAG, "Cannot configure more buttons");
-        err = ESP_FAIL;
-        return err;
-    }
-
-    static uint16_t generic_switch_endpoint_id = 0;
-    generic_switch_endpoint_id = endpoint::get_id(endpoint);
-    ESP_LOGI(TAG, "Generic Switch created with endpoint_id %d", generic_switch_endpoint_id);
+    // Save the button and endpoint in the button storage
+    button_list[configured_buttons].button = button;
+    button_list[configured_buttons].endpoint = endpoint::get_id(endpoint);
+    configured_buttons++;
 
     /* Add additional features to the node */
     cluster_t *cluster = cluster::get(endpoint, Switch::Id);
 
 #if CONFIG_GENERIC_SWITCH_TYPE_MOMENTARY
     cluster::switch_cluster::feature::action_switch::add(cluster);
+    
+#if CONFIG_BUTTON_ENABLE_DOUBLE_CLICK
+    // Configure multi-press feature for momentary switches
+    ESP_LOGI(TAG, "Enabling double-click feature for momentary switches");
     cluster::switch_cluster::feature::momentary_switch_multi_press::config_t msm;
-    msm.multi_press_max = 5;
+    msm.multi_press_max = 2;
     cluster::switch_cluster::feature::momentary_switch_multi_press::add(cluster, &msm);
 #endif
 
-    return err;
+#if CONFIG_BUTTON_ENABLE_LONG_PRESS
+    // Configure long-press feature for momentary switches
+    ESP_LOGI(TAG, "Enabling long-press feature for momentary switches");
+    cluster::switch_cluster::feature::momentary_switch_long_press::add(cluster);
+#endif
+
+#endif
+
+    return ESP_OK;
 }
 
 /** 
@@ -206,13 +209,13 @@ static esp_err_t create_button(struct gpio_button* button, node_t* node)
  * @param[in] node Matter node pointer
  *
  * @return ESP_OK on success.
- * @return ESP_ERR_NO_MEM if button storage is full.
- * @return Other errors from create_button.
+ * @return ESP_ERR_NO_MEM if button storage exceeded.
+ * @return ESP_FAIL if node or endpoint creation fails.
  */
 static esp_err_t create_button(int pin_number, node_t* node)
 {
-    if (configured_buttons >= CONFIG_MAX_CONFIGURABLE_BUTTONS) {
-        ESP_LOGE(TAG, "Button storage full. Cannot create more buttons. Max: %d", CONFIG_MAX_CONFIGURABLE_BUTTONS);
+    if (configured_buttons >= CONFIG_BUTTON_COUNT) {
+        ESP_LOGE(TAG, "Button storage full. Cannot create more buttons. Max: %d", CONFIG_BUTTON_COUNT);
         return ESP_ERR_NO_MEM;
     }
     
@@ -220,6 +223,15 @@ static esp_err_t create_button(int pin_number, node_t* node)
     return create_button(&button_storage[configured_buttons], node);
 }
 
+/**
+ * Get the endpoint ID for a given button.
+ *
+ * This function searches through the configured buttons to find the endpoint ID associated with the button.
+ *
+ * @param[in] button Pointer to `gpio_button`.
+ *
+ * @return Endpoint ID if found, -1 if not found.
+ */
 int get_endpoint(gpio_button* button) {
     for (int i = 0; i < configured_buttons; i++) {
         if (button_list[i].button == button) {
@@ -302,5 +314,4 @@ extern "C" void app_main()
     esp_matter::console::factoryreset_register_commands();
     esp_matter::console::init();
 #endif
-
 }

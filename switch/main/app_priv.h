@@ -21,7 +21,7 @@ struct button_endpoint
 
 extern int get_endpoint(gpio_button* button);
 
-typedef void *app_driver_handle_t;
+typedef void* app_driver_handle_t;
 
 /** Initialize the button driver
  *
