@@ -9,6 +9,11 @@ initially showing as a "TEST DEVICE" after commissioning (it can then be renamed
 
 To change this, or the credentials required (QR/manual code) to commission, you need a proper Matter certification.
 
+Reading Materials
+-----------------
+* [Matter Specifications](https://handbook.buildwithmatter.com/specification/)
+* [Kconfig Example](https://github.com/espressif/esp-idf/blob/master/examples/common_components/protocol_examples_common/Kconfig.projbuild)
+
 Getting Started
 ---------------
 You'll need a few system packages available, and then both of the ESP-IDF SDK and the ESP-Matter SDK. Both follow
@@ -27,8 +32,7 @@ For Linux (Ubuntu) users:
 	sudo usermod -aG dialout `whoami`
 	newgrp dialout
 
-ESP IDF
--------
+### ESP IDF
 
 	git clone --recursive https://github.com/espressif/esp-idf.git
 	cd esp-idf
@@ -38,8 +42,7 @@ ESP IDF
 	. ./export.sh
 	cd ..
 
-ESP Matter
-----------
+### ESP Matter
 	
 	git clone --recursive https://github.com/espressif/esp-matter.git
 	git checkout release/v1.4
@@ -55,10 +58,13 @@ Building Apps
 
     # On new terminal - export both SDKs:
     . ./init
-    cd <app-name>
+    cd omni
 	
     # Configure new target (only do once, or if you delete the `build` directory)
 	idf.py set-target esp32s3		# replace with correct MCU
+
+	# Configure Matter endpoints (see below):
+	idf.py menuconfig
 
 	# Build & flash
 	idf.py build 
@@ -72,6 +78,8 @@ commands:
 
 	matter config
 	matter onboardingcodes ble
+
+> Note that until you've completed Matter certification, you will need to use the TESTING DEVICE onboarding codes.
 
 Troubleshooting
 ---------------
@@ -88,10 +96,8 @@ Completely wipe the device including NVS partitions (good way to unpair):
 
 Menu Config
 -----------
-Out of the box, you shouldn't need to run `menuconfig`. But this `idf.py` command allows you configure everything that
-can be built into a device build.
-
-The result will be a `sdkconfig` file created. If you need this committed to the git project, however, you need to 
-move changed settings into the `sdkconfig.defaults` file (or respective defaults target).
+The ESP-Matter SDK uses a KConfig system to generate environment variables which define your project configuration.
+The default files include a working set of configuration, but to add Matter endpoints to the application, you need to
+invoke the `menuconfig` system and set pin configuration, etc in the `Application` menu.
 
     idf.py menuconfig

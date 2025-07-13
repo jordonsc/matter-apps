@@ -8,9 +8,12 @@
 
 #include <common_macros.h>
 #include <enable_esp_insights.h>
-#include <app_button.h>
 #include <app_reset.h>
 #include <app/util/attribute-storage.h>
+
+#if CONFIG_APP_BUTTON_ENABLED
+#include <app_button.h>
+#endif
 
 #if CHIP_DEVICE_CONFIG_ENABLE_THREAD
 #include <platform/ESP32/OpenthreadLauncher.h>
@@ -123,8 +126,10 @@ extern "C" void app_main()
     node_t *node = node::create(&node_config, app_attribute_update_cb, app_identification_cb);
     ABORT_APP_ON_FAILURE(node != nullptr, ESP_LOGE(TAG, "Failed to create Matter node"));
 
+#if CONFIG_APP_BUTTON_ENABLED
     // Create application buttons
     create_application_buttons(node);
+#endif
 
 #if CHIP_DEVICE_CONFIG_ENABLE_THREAD
     // Set OpenThread platform config

@@ -1,42 +1,40 @@
  menu "Application"
 
 	menu "Switch"
-		config GENERIC_SWITCH_TYPE
-			choice
-				prompt "Switch type"
-				default GENERIC_SWITCH_TYPE_MOMENTARY
-				help
-					Select between a latching switch or momentary button.
-
-				config GENERIC_SWITCH_TYPE_LATCHING
-					bool "[LS] Latching switch"
-
-				config GENERIC_SWITCH_TYPE_MOMENTARY
-					bool "[AS] Momentary action-switch with optional double-click and long-press"			
-			endchoice
+		config APP_BUTTON_ENABLED
+			bool "Switch feature enabled"
+			default n
+			help
+				Enables the Generic Switch feature to create momentary button or latching switch endpoints.
 		
 		config BUTTON_GPIO_LIST
-			string "Comma delimited list of GPIO numbers to add switches"
-			default "9"
+			depends on APP_BUTTON_ENABLED
+			string "Switch GPIO list"
+			default "M9"
+			help
+				A space-separated list of switch specifications.
+				L9  - latching on pin 9
+				M9  - momentary on pin 9
+				MD9 - momentary-double-click on pin 9
+				ML9 - momentary-long-press on pin 9
+				MX9 - momentary-double-click-long-press on pin 9
 
 		config BUTTON_COUNT
+			depends on APP_BUTTON_ENABLED
 			int "Numer of items in GPIO list"
 			default 1
 			range 1 50
-
-		config BUTTON_ENABLE_DOUBLE_CLICK
-			depends on GENERIC_SWITCH_TYPE_MOMENTARY
-			bool "Enable double-clicking of momentary buttons"
-
-		config BUTTON_ENABLE_LONG_PRESS
-			depends on GENERIC_SWITCH_TYPE_MOMENTARY
-			bool "Enable long-pressing of momentary buttons"
-
-		config BUTTON_LONG_PRESS_TIME
-			depends on GENERIC_SWITCH_TYPE_MOMENTARY
-			int "Time in ms for a button-hold to be considered a long-press"
+			help
+				This is the memory size for button storage. Set to the number of elements in the GPIO list.
+		
+		config BUTTON_LONG_PRESS_TIME_MS
+			depends on APP_BUTTON_ENABLED
+			int "Time in ms for a long-press to register"
 			default 750
 			range 1 10000
+			help
+				How long must a button remain pressed before it is deemed a long press.
+
 	endmenu
 
 

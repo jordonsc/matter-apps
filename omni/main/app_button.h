@@ -8,9 +8,18 @@
 #include "esp_openthread_types.h"
 #endif
 
+enum class button_mechanism: uint8_t
+{
+    MOMENTARY = 0,
+    LATCHING  = 1,
+};
+
 struct gpio_button
 {
-      gpio_num_t GPIO_PIN_VALUE;
+    gpio_num_t gpio_pin;
+    button_mechanism mechanism = button_mechanism::MOMENTARY;
+    bool feature_double_click = false;
+    bool feature_long_press = false;
 };
 
 struct button_endpoint
@@ -33,18 +42,21 @@ using namespace esp_matter;
 esp_err_t create_button(struct gpio_button* button, node_t* node);
 
 /**
- * Create button from GPIO pin number.
+ * Creates and configures a new button instance.
+ *
+ * This function initializes a button with the specified GPIO pin, mechanism type,
+ * double-click and long-press capabilities, and associates it with a node.
  * 
- * This will create an iot_button from a gpio_button.
+ * It checks if the button storage is full before proceeding.
  *
- * @param[in] pin_number GPIO pin number for the button.
- * @param[in] node Pointer to the Matter node.
- *
- * @return ESP_OK on success.
- * @return ESP_ERR_NO_MEM if button storage exceeded.
- * @return ESP_FAIL if node or endpoint creation fails.
+ * @param pin_number      GPIO pin number to which the button is connected.
+ * @param mechanism       The button mechanism type (momentary vs latching).
+ * @param dbl             Enable double-click detection if true.
+ * @param lpress          Enable long-press detection if true.
+ * @param node            Pointer to the node to associate with the button.
+ * @return esp_err_t      ESP_OK on success, ESP_ERR_NO_MEM if storage is full, or other error codes.
  */
-esp_err_t create_button(int pin_number, node_t* node);
+esp_err_t create_button(int pin_number, button_mechanism mechanism, bool dbl, bool lpress, node_t* node);
 
 /**
  * Get the endpoint ID for a given button.
@@ -60,7 +72,7 @@ int get_button_endpoint(gpio_button* button);
 /**
  * Using the button list configured via Kconfig, create the buttons and add them to the Matter node.
  */
-void create_application_buttons(node_t *node);
+void create_application_buttons(node_t* node);
 
 
 /** 
@@ -73,7 +85,7 @@ void create_application_buttons(node_t *node);
  * @return Handle on success.
  * @return NULL in case of failure.
  */
-btn_handle_t button_init(gpio_button *button = NULL);
+btn_handle_t button_init(gpio_button* button = NULL);
 
 /** 
  * Driver Update
@@ -94,7 +106,7 @@ esp_err_t button_attribute_update(
     uint16_t endpoint_id, 
     uint32_t cluster_id,
     uint32_t attribute_id, 
-    esp_matter_attr_val_t *val
+    esp_matter_attr_val_t* val
 );
 
 #if CHIP_DEVICE_CONFIG_ENABLE_THREAD
