@@ -19,11 +19,52 @@ struct button_endpoint
     uint16_t endpoint;
 };
 
-extern int get_button_endpoint(gpio_button* button);
-
 typedef void* btn_handle_t;
 
-/** Initialize the button driver
+using namespace esp_matter;
+
+/**
+ * Create a button from a GPIO button structure.
+ *
+ * @return ESP_OK on success.
+ * @return ESP_ERR_NO_MEM if button storage exceeded.
+ * @return ESP_FAIL if node or endpoint creation fails.
+ */
+esp_err_t create_button(struct gpio_button* button, node_t* node);
+
+/**
+ * Create button from GPIO pin number.
+ * 
+ * This will create an iot_button from a gpio_button.
+ *
+ * @param[in] pin_number GPIO pin number for the button.
+ * @param[in] node Pointer to the Matter node.
+ *
+ * @return ESP_OK on success.
+ * @return ESP_ERR_NO_MEM if button storage exceeded.
+ * @return ESP_FAIL if node or endpoint creation fails.
+ */
+esp_err_t create_button(int pin_number, node_t* node);
+
+/**
+ * Get the endpoint ID for a given button.
+ *
+ * This function searches through the configured buttons to find the endpoint ID associated with the button.
+ *
+ * @param[in] button Pointer to `gpio_button`.
+ *
+ * @return Endpoint ID if found, -1 if not found.
+ */
+int get_button_endpoint(gpio_button* button);
+
+/**
+ * Using the button list configured via Kconfig, create the buttons and add them to the Matter node.
+ */
+void create_application_buttons(node_t *node);
+
+
+/** 
+ * Initialize the button driver
  *
  * This initializes the button driver associated with the selected board.
  *
@@ -48,8 +89,13 @@ btn_handle_t button_init(gpio_button *button = NULL);
  * @return ESP_OK on success.
  * @return error in case of failure.
  */
-esp_err_t button_attribute_update(btn_handle_t driver_handle, uint16_t endpoint_id, uint32_t cluster_id,
-                                      uint32_t attribute_id, esp_matter_attr_val_t *val);
+esp_err_t button_attribute_update(
+    btn_handle_t driver_handle, 
+    uint16_t endpoint_id, 
+    uint32_t cluster_id,
+    uint32_t attribute_id, 
+    esp_matter_attr_val_t *val
+);
 
 #if CHIP_DEVICE_CONFIG_ENABLE_THREAD
 #define ESP_OPENTHREAD_DEFAULT_RADIO_CONFIG()                                           \

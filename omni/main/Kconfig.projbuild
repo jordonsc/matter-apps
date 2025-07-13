@@ -25,12 +25,15 @@
 			range 1 50
 
 		config BUTTON_ENABLE_DOUBLE_CLICK
+			depends on GENERIC_SWITCH_TYPE_MOMENTARY
 			bool "Enable double-clicking of momentary buttons"
 
 		config BUTTON_ENABLE_LONG_PRESS
+			depends on GENERIC_SWITCH_TYPE_MOMENTARY
 			bool "Enable long-pressing of momentary buttons"
 
 		config BUTTON_LONG_PRESS_TIME
+			depends on GENERIC_SWITCH_TYPE_MOMENTARY
 			int "Time in ms for a button-hold to be considered a long-press"
 			default 750
 			range 1 10000

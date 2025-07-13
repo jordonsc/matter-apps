@@ -44,7 +44,7 @@ set(EXTRA_COMPONENT_DIRS
     "${ESP_MATTER_PATH}/device_hal/device"
     ${extra_components_dirs_append})
 
-project(switch)
+project(omni)
 
 if(CONFIG_IDF_TARGET_ESP32C2)
     include(relinker)
