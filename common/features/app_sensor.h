@@ -66,3 +66,11 @@ void create_application_sensors(node_t* node);
  * Destroy all application sensors and clean up their resources.
  */
 void destroy_application_sensors(void);
+
+/**
+ * Sync all sensor states to their Matter attributes.
+ * 
+ * This should be called after the Matter network is available to ensure
+ * the initial sensor states are properly reflected in the attributes.
+ */
+void sync_sensor_states(void);

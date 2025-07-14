@@ -1,31 +1,14 @@
-/*
-   This example code is in the Public Domain (or CC0 licensed, at your option.)
-
-   Unless required by applicable law or agreed to in writing, this
-   software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
-   CONDITIONS OF ANY KIND, either express or implied.
-*/
-
-/* It is recommended to copy this code in your example so that you can modify as per your application's needs,
- * especially for the indicator calbacks, button_factory_reset_pressed_cb() and button_factory_reset_released_cb().
- */
-
 #include <esp_log.h>
 #include <esp_matter.h>
 #include "iot_button.h"
+#include "button_gpio.h"
 
 static const char *TAG = "app_reset";
 static bool perform_factory_reset = false;
+static button_handle_t reset_button_handle = NULL;
 
-static void button_factory_reset_pressed_cb(void* arg, void* data)
-{
-    if (!perform_factory_reset) {
-        ESP_LOGI(TAG, "Factory reset triggered. Release the button to start factory reset.");
-        perform_factory_reset = true;
-    }
-}
 
-static void button_factory_reset_released_cb(void* arg, void* data)
+static void factory_restart_begin(void* arg, void* data)
 {
     if (perform_factory_reset) {
         ESP_LOGI(TAG, "Starting factory reset");
@@ -34,18 +17,38 @@ static void button_factory_reset_released_cb(void* arg, void* data)
     }
 }
 
-esp_err_t app_reset_button_register(void* handle)
+esp_err_t register_app_reset()
 {
-    if (!handle) {
-        ESP_LOGE(TAG, "Handle cannot be NULL");
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    button_handle_t button_handle = (button_handle_t)handle;
     esp_err_t err = ESP_OK;
 
-    err |= iot_button_register_cb(button_handle, BUTTON_LONG_PRESS_HOLD, NULL, button_factory_reset_pressed_cb, NULL);
-    err |= iot_button_register_cb(button_handle, BUTTON_PRESS_UP, NULL, button_factory_reset_released_cb, NULL);
+    // Create button configuration
+    button_config_t button_cfg = {
+        .long_press_time = CONFIG_RESET_HOLD_TIME
+    };
+
+    // Create GPIO button configuration for GPIO 0
+    button_gpio_config_t gpio_cfg = {
+        .gpio_num = atoi(CONFIG_RESET_GPIO_PIN),
+        .active_level = 0,
+        .enable_power_save = false,
+        .disable_pull = false,
+    };
+
+    // Create the GPIO button device
+    err = iot_button_new_gpio_device(&button_cfg, &gpio_cfg, &reset_button_handle);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to create GPIO button device: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    // Register callbacks
+    err |= iot_button_register_cb(reset_button_handle, BUTTON_LONG_PRESS_UP, NULL, factory_restart_begin, NULL);
     
-    return err;
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to register button callbacks: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    ESP_LOGI(TAG, "Factory reset button registered on GPIO 0");
+    return ESP_OK;
 }

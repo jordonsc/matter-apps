@@ -17,16 +17,16 @@
 #endif
 
 // Random bits of the Matter stack (event messages, etc)
-#include "app_matter.h"
+#include <app_matter.h>
 
 #if CONFIG_APP_BUTTON_ENABLED
 // Button handling
-#include "app_button.h"
+#include <app_button.h>
 #endif
 
 #if CONFIG_APP_SENSOR_ENABLED
 // Sensor handling
-#include "app_sensor.h"
+#include <app_sensor.h>
 #endif
 
 static const char *TAG = "app_main";

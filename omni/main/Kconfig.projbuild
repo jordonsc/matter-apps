@@ -1,4 +1,28 @@
 menu "Omni"
+	menu "Reset"
+		config APP_RESET_ENABLED
+			bool "Factory reset feature enabled"
+			default y
+			help
+				Allows a GPIO pin to trigger a factory reset
+		
+		config RESET_GPIO_PIN
+			depends on APP_RESET_ENABLED
+			string "Reset button GPIO pin"
+			default 0
+			range 0 50
+			help
+				Pin number for GPIO reset button.
+
+		config RESET_HOLD_TIME
+			depends on APP_RESET_ENABLED
+			int "Reset button hold time"
+			default 3000
+			range 1 10000
+			help
+				Time in ms the reset button must be held
+		
+	endmenu
 
 	menu "Switch"
 		config APP_BUTTON_ENABLED

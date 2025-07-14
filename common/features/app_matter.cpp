@@ -1,5 +1,9 @@
 #include "app_matter.h"
 
+#if CONFIG_APP_SENSOR_ENABLED
+#include "app_sensor.h"
+#endif
+
 static const char *TAG = "app_matter";
 
 using namespace esp_matter;
@@ -7,6 +11,14 @@ using namespace esp_matter;
 void app_event_cb(const ChipDeviceEvent *event, intptr_t arg)
 {
     switch (event->Type) {
+    case chip::DeviceLayer::DeviceEventType::kWiFiConnectivityChange:
+        ESP_LOGI(TAG, "WiFi connectivity changed");
+#if CONFIG_APP_SENSOR_ENABLED
+        // Sync sensor states to Matter attributes now that WiFi is connected
+        sync_sensor_states();
+#endif
+        break;
+
     case chip::DeviceLayer::DeviceEventType::kInterfaceIpAddressChanged:
         ESP_LOGI(TAG, "Interface IP Address changed");
         break;

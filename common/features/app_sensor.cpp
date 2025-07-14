@@ -128,6 +128,16 @@ void create_sensor(node_t* node, gpio_sensor* sensor)
         return;
     }
     
+    // Read the current GPIO state and set the initial sensor state
+    bool current_gpio_state = gpio_get_level(sensor->gpio_pin);
+    sensor->state = sensor->inverted ? !current_gpio_state : current_gpio_state;
+    
+    ESP_LOGI(TAG, "Sensor initialized with state %s (GPIO=%s, inverted=%s)", 
+        sensor->state ? "HIGH" : "LOW",
+        current_gpio_state ? "HIGH" : "LOW",
+        sensor->inverted ? "true" : "false"
+    );
+    
     // Register callbacks for button press/release events
     ret = iot_button_register_cb(sensor->button_handle, BUTTON_PRESS_DOWN, nullptr, sensor_button_handler, sensor);
     if (ret != ESP_OK) {
@@ -228,7 +238,6 @@ void create_application_sensors(node_t* node)
                 // Create the sensor with the parsed features                
                 gpio_sensor* sensor = &sensor_storage[configured_sensors++];
                 sensor->gpio_pin = (gpio_num_t)pin;
-                sensor->state = false;
                 sensor->inverted = inverted;
                 sensor->type = type;
                 sensor->subtype = sensor_subtype::GENERAL;  // maybe one day this will be useful; HASS doesn't use it
@@ -254,4 +263,38 @@ void destroy_application_sensors(void)
     }
     
     configured_sensors = 0;
+}
+
+/**
+ * Sync all sensor states to their Matter attributes.
+ * 
+ * This should be called after the Matter network is available to ensure
+ * the initial sensor states are properly reflected in the attributes.
+ */
+void sync_sensor_states(void)
+{
+    ESP_LOGI(TAG, "Syncing %d sensor states to Matter attributes", configured_sensors);
+    
+    for (int i = 0; i < configured_sensors; ++i) {
+        gpio_sensor* sensor = &sensor_storage[i];
+        if (sensor->button_handle != nullptr) {
+            esp_matter_attr_val_t val = esp_matter_bool(sensor->state);
+            esp_err_t ret = attribute::update(
+                sensor->endpoint,
+                OccupancySensing::Id,
+                OccupancySensing::Attributes::Occupancy::Id, 
+                &val
+            );
+            
+            if (ret == ESP_OK) {
+                ESP_LOGI(TAG, "Synced sensor endpoint %d to state %s", 
+                    sensor->endpoint, sensor->state ? "HIGH" : "LOW");
+            } else {
+                ESP_LOGW(TAG, "Failed to sync sensor endpoint %d: %s", 
+                    sensor->endpoint, esp_err_to_name(ret));
+            }
+        } else {
+            ESP_LOGW(TAG, "Sensor %d has no button handle, skipping sync", i);
+        }
+    }
 }

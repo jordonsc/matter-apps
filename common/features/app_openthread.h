@@ -20,4 +20,4 @@
         .netif_queue_size = 10,                                                         \
         .task_queue_size = 10,                                                          \
     }
-#endif // CHIP_DEVICE_CONFIG_ENABLE_THREAD
+#endif
