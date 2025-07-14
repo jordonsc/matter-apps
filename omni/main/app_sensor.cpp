@@ -1,46 +1,62 @@
 #include "app_sensor.h"
+#include <button_gpio.h>
 
 using namespace chip::app::Clusters;
 using namespace esp_matter;
 using namespace esp_matter::cluster;
 using namespace esp_matter::endpoint;
 
-static const char *TAG = "app_main";
+static const char *TAG = "app_sensor";
 
 static uint16_t configured_sensors = 0;
 static struct gpio_sensor sensor_storage[5];
 
 
-static void sensor_gpio_handler(void* data)
+/**
+ * Handler for iot_button events.
+ */
+static void sensor_button_handler(void* button_handle, void* usr_data)
 {
-    gpio_sensor* sensor = (gpio_sensor*)data;
-    bool new_state = gpio_get_level(sensor->gpio_pin);
+    gpio_sensor* sensor = (gpio_sensor*)usr_data;
+    button_event_t event = iot_button_get_event((button_handle_t)button_handle);
+    
+    bool new_state = false;
+    
+    // Map button events to sensor state
+    switch (event) {
+        case BUTTON_PRESS_DOWN:
+            new_state = true;
+            break;
+        case BUTTON_PRESS_UP:
+            new_state = false;
+            break;
+        default:
+            // Ignore other button events for sensor purposes
+            return;
+    }
 
     if (sensor->inverted) {
         // Invert the state if configured
         new_state = !new_state; 
     }
 
-    // we only need to notify application layer if occupancy changed
+    // Dispatch update only if the state has change
     if (sensor->state != new_state) {
         sensor->state = new_state;
         
-        // Cannot use ESP_LOG in the interrupt - put it in the lambda to run in the main loop
-        chip::DeviceLayer::SystemLayer().ScheduleLambda([sensor]() {
-            ESP_LOGI(
-                TAG, "Sensor endpoint %d on GPIO %d changed state to %s", 
-                sensor->endpoint, sensor->gpio_pin, 
-                sensor->state ? "HIGH" : "LOW"
-            );
+        ESP_LOGI(
+            TAG, "Sensor endpoint %d on GPIO %d changed state to %s", 
+            sensor->endpoint, sensor->gpio_pin, 
+            sensor->state ? "HIGH" : "LOW"
+        );
 
-            esp_matter_attr_val_t val = esp_matter_bool(sensor->state);
-            attribute::update(
-                sensor->endpoint,
-                OccupancySensing::Id,
-                OccupancySensing::Attributes::Occupancy::Id, 
-                &val
-            );
-        });
+        esp_matter_attr_val_t val = esp_matter_bool(sensor->state);
+        attribute::update(
+            sensor->endpoint,
+            OccupancySensing::Id,
+            OccupancySensing::Attributes::Occupancy::Id, 
+            &val
+        );
     }
 }
 
@@ -48,12 +64,14 @@ static void sensor_gpio_handler(void* data)
  * Create a sensor from a GPIO pin.
  * 
  * Note that this assumes an occupancy sensor, no other sensor types are currently supported.
+ * 
+ * This implementation uses the iot_button component instead of raw GPIO ISR for better debouncing and power 
+ * management.
  *
  * @param node Pointer to the Matter node.
  * @param sensor Pointer to `gpio_sensor` structure containing sensor configuration.
- * @param pull_mode GPIO pull mode (e.g., GPIO_PULLUP_ONLY, GPIO_PULLDOWN_ONLY).
  */
-void create_sensor(node_t* node, gpio_sensor* sensor, gpio_pull_mode_t pull_mode)
+void create_sensor(node_t* node, gpio_sensor* sensor)
 {
     ESP_LOGI(TAG, "Creating occupancy sensor on GPIO %d", sensor->gpio_pin);
 
@@ -81,24 +99,66 @@ void create_sensor(node_t* node, gpio_sensor* sensor, gpio_pull_mode_t pull_mode
     }
     sensor->endpoint = endpoint::get_id(sensor_endpoint);
 
-    cluster_t* cluster = cluster::get(sensor_endpoint, OccupancySensing::Id);
     cluster_t* descriptor = cluster::get(sensor_endpoint, Descriptor::Id);
     descriptor::feature::taglist::add(descriptor);
 
+    // Occupancy sensor sub-type(s)
+    //cluster_t* cluster = cluster::get(sensor_endpoint, OccupancySensing::Id);
+    //cluster::occupancy_sensing::feature::radar::add(cluster);
+
     ESP_LOGI(TAG, "Sensor created with endpoint_id %d", sensor->endpoint);
 
-    // Occupancy sensor sub-type(s)
-    cluster::occupancy_sensing::feature::radar::add(cluster);
 
-    // Initialise the GPIO pin
-    gpio_reset_pin(sensor->gpio_pin);
-    gpio_set_intr_type(sensor->gpio_pin, GPIO_INTR_ANYEDGE);
-    gpio_set_direction(sensor->gpio_pin, GPIO_MODE_INPUT);
-    gpio_set_pull_mode(sensor->gpio_pin, pull_mode);
-    gpio_install_isr_service(0);
-    gpio_isr_handler_add(sensor->gpio_pin, sensor_gpio_handler, sensor);
+    // Create iot_button for the GPIO pin
+    button_config_t button_cfg = {
+        .long_press_time = 0,  // Not needed for sensor
+        .short_press_time = 0, // Not needed for sensor
+    };
+    
+    button_gpio_config_t gpio_cfg = {
+        .gpio_num = sensor->gpio_pin,
+        .active_level = 0,
+        .enable_power_save = false,
+        .disable_pull = false,
+    };
+    
+    esp_err_t ret = iot_button_new_gpio_device(&button_cfg, &gpio_cfg, &sensor->button_handle);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to create iot_button for GPIO %d: %s", sensor->gpio_pin, esp_err_to_name(ret));
+        return;
+    }
+    
+    // Register callbacks for button press/release events
+    ret = iot_button_register_cb(sensor->button_handle, BUTTON_PRESS_DOWN, nullptr, sensor_button_handler, sensor);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to register BUTTON_PRESS_DOWN callback for GPIO %d: %s", sensor->gpio_pin, esp_err_to_name(ret));
+        iot_button_delete(sensor->button_handle);
+        sensor->button_handle = nullptr;
+        return;
+    }
+    
+    ret = iot_button_register_cb(sensor->button_handle, BUTTON_PRESS_UP, nullptr, sensor_button_handler, sensor);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to register BUTTON_PRESS_UP callback for GPIO %d: %s", sensor->gpio_pin, esp_err_to_name(ret));
+        iot_button_delete(sensor->button_handle);
+        sensor->button_handle = nullptr;
+        return;
+    }
 }
 
+/**
+ * Destroy a sensor and clean up its resources.
+ * 
+ * @param sensor Pointer to gpio_sensor structure to destroy.
+ */
+void destroy_sensor(gpio_sensor* sensor)
+{
+    if (sensor && sensor->button_handle) {
+        ESP_LOGI(TAG, "Destroying sensor on GPIO %d", sensor->gpio_pin);
+        iot_button_delete(sensor->button_handle);
+        sensor->button_handle = nullptr;
+    }
+}
 
 /**
  * Using the sensor list configured via Kconfig, create the sensors and add them to the Matter node.
@@ -173,11 +233,25 @@ void create_application_sensors(node_t* node)
                 sensor->type = type;
                 sensor->subtype = sensor_subtype::GENERAL;  // maybe one day this will be useful; HASS doesn't use it
 
-                create_sensor(node, sensor, GPIO_PULLUP_ONLY);
+                create_sensor(node, sensor);
             }
             token = strtok(nullptr, " ");
         }
     } else {
         ESP_LOGW(TAG, "No GPIO pins configured for buttons. Please set CONFIG_BUTTON_GPIO_LIST.");
     }
+}
+
+/**
+ * Destroy all application sensors and clean up their resources.
+ */
+void destroy_application_sensors(void)
+{
+    ESP_LOGI(TAG, "Destroying %d application sensors", configured_sensors);
+    
+    for (int i = 0; i < configured_sensors; i++) {
+        destroy_sensor(&sensor_storage[i]);
+    }
+    
+    configured_sensors = 0;
 }

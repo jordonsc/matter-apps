@@ -4,6 +4,7 @@
 #include <esp_log.h>
 #include <esp_matter.h>
 #include <driver/gpio.h>
+#include <iot_button.h>
 
 using namespace esp_matter;
 
@@ -34,16 +35,23 @@ struct gpio_sensor
     bool inverted = false;
     sensor_type type = sensor_type::OCCUPANCY;
     sensor_subtype subtype = sensor_subtype::GENERAL;
+    button_handle_t button_handle = nullptr;
 };
 
 /**
  * Create a sensor from a GPIO pin.
  *
  * @param node Pointer to the Matter node.
- * @param pin GPIO pin number to which the sensor is connected.
- * @param pull_mode GPIO pull mode (e.g., GPIO_PULLUP_ONLY, GPIO_PULLDOWN_ONLY).
+ * @param sensor Pointer to gpio_sensor structure containing sensor configuration.
  */
-void create_sensor(node_t* node, gpio_sensor* sensor, gpio_pull_mode_t pull_mode = GPIO_PULLUP_ONLY);
+void create_sensor(node_t* node, gpio_sensor* sensor);
+
+/**
+ * Destroy a sensor and clean up its resources.
+ *
+ * @param sensor Pointer to gpio_sensor structure to destroy.
+ */
+void destroy_sensor(gpio_sensor* sensor);
 
 /**
  * Using the sensor list configured via Kconfig, create the sensors and add them to the Matter node.
@@ -53,3 +61,8 @@ void create_sensor(node_t* node, gpio_sensor* sensor, gpio_pull_mode_t pull_mode
  * @param node Pointer to the Matter node to which sensors will be added.
  */
 void create_application_sensors(node_t* node);
+
+/**
+ * Destroy all application sensors and clean up their resources.
+ */
+void destroy_application_sensors(void);
