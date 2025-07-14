@@ -1,54 +1,49 @@
-#include <esp_log.h>
-#include <stdlib.h>
-#include <string.h>
-
-#include <esp_matter.h>
-#include <app-common/zap-generated/attributes/Accessors.h>
-
-#include <app_button.h>
-#include <iot_button.h>
-#include <button_gpio.h>
+#include "app_button.h"
 
 using namespace chip::app::Clusters;
 using namespace esp_matter;
 using namespace esp_matter::cluster;
 using namespace esp_matter::endpoint;
 
-static const char *TAG = "app_button";
+static const char* TAG = "app_button";
 
 static uint16_t configured_buttons = 0;
 static button_endpoint button_list[CONFIG_BUTTON_COUNT];
 static struct gpio_button button_storage[CONFIG_BUTTON_COUNT];
 
-/**
- * Called when a button attribute is updated.
- */
-esp_err_t button_attribute_update(
-    btn_handle_t driver_handle, 
-    uint16_t endpoint_id, 
-    uint32_t cluster_id,
-    uint32_t attribute_id, 
-    esp_matter_attr_val_t *val
-)
-{
-    return ESP_OK;
-}
 
 /**
  * Latching switched changed position.
  */
-static void button_switch_latched(void *arg, void *data)
+static void button_switch_latched(void* arg, void* data)
 {
     gpio_button* button = (gpio_button*)data;
     int switch_endpoint_id = (button != NULL) ? get_button_endpoint(button) : 1;
     ESP_LOGI(TAG, "Button [%d]: LATCHED", button->gpio_pin);
 
-    // TODO: make the latch position use real data
-    int pos = 1;
+    uint8_t pos = (uint8_t)switch_latch_position::OPEN;
     chip::DeviceLayer::SystemLayer().ScheduleLambda([switch_endpoint_id, pos]() {
         chip::app::Clusters::Switch::Attributes::CurrentPosition::Set(switch_endpoint_id, pos);
         
-        // SwitchLatched event takes newPosition as event data
+        // SwitchLatched event takes position as event data
+        switch_cluster::event::send_switch_latched(switch_endpoint_id, pos);
+    });
+}
+
+/**
+ * Latching switched changed position.
+ */
+static void button_switch_unlatched(void* arg, void* data)
+{
+    gpio_button* button = (gpio_button*)data;
+    int switch_endpoint_id = (button != NULL) ? get_button_endpoint(button) : 1;
+    ESP_LOGI(TAG, "Button [%d]: UNLATCHED", button->gpio_pin);
+
+    uint8_t pos = (uint8_t)switch_latch_position::CLOSED;
+    chip::DeviceLayer::SystemLayer().ScheduleLambda([switch_endpoint_id, pos]() {
+        chip::app::Clusters::Switch::Attributes::CurrentPosition::Set(switch_endpoint_id, pos);
+        
+        // SwitchLatched event takes position as event data
         switch_cluster::event::send_switch_latched(switch_endpoint_id, pos);
     });
 }
@@ -56,7 +51,7 @@ static void button_switch_latched(void *arg, void *data)
 /**
  * Button initial depressed.
  */
-static void button_on_down(void *arg, void *data)
+static void button_on_down(void* arg, void* data)
 {
     gpio_button* button = (gpio_button*)data;
     int switch_endpoint_id = (button != NULL) ? get_button_endpoint(button) : 1;
@@ -75,7 +70,7 @@ static void button_on_down(void *arg, void *data)
 /**
  * Button released.
  */
-static void button_on_up(void *arg, void *data)
+static void button_on_up(void* arg, void* data)
 {
     gpio_button* button = (gpio_button*)data;
     int switch_endpoint_id = (button != NULL) ? get_button_endpoint(button) : 1;
@@ -91,7 +86,7 @@ static void button_on_up(void *arg, void *data)
 /**
  * Button press end.
  */
-static void button_on_press_end(void *arg, void *data)
+static void button_on_press_end(void* arg, void* data)
 {
     gpio_button* button = (gpio_button*)data;
     int switch_endpoint_id = (button != NULL) ? get_button_endpoint(button) : 1;
@@ -107,7 +102,7 @@ static void button_on_press_end(void *arg, void *data)
 /**
  * Button single-click.
  */
-static void button_on_single_click(void *arg, void *data)
+static void button_on_single_click(void* arg, void* data)
 {
     gpio_button* button = (gpio_button*)data;
     int switch_endpoint_id = (button != NULL) ? get_button_endpoint(button) : 1;
@@ -123,7 +118,7 @@ static void button_on_single_click(void *arg, void *data)
 /**
  * Button double-click.
  */
-static void button_on_double_click(void *arg, void *data)
+static void button_on_double_click(void* arg, void* data)
 {
     gpio_button* button = (gpio_button*)data;
     int switch_endpoint_id = (button != NULL) ? get_button_endpoint(button) : 1;
@@ -139,7 +134,7 @@ static void button_on_double_click(void *arg, void *data)
 /**
  * Button long-press start.
  */
-static void button_on_long_press_start(void *arg, void *data)
+static void button_on_long_press_start(void* arg, void* data)
 {
     gpio_button* button = (gpio_button*)data;
     int switch_endpoint_id = (button != NULL) ? get_button_endpoint(button) : 1;
@@ -155,7 +150,7 @@ static void button_on_long_press_start(void *arg, void *data)
 /**
  * Button long-press end.
  */
-static void button_on_long_press_end(void *arg, void *data)
+static void button_on_long_press_end(void* arg, void* data)
 {
     gpio_button* button = (gpio_button*)data;
     int switch_endpoint_id = (button != NULL) ? get_button_endpoint(button) : 1;
@@ -193,6 +188,7 @@ btn_handle_t button_init(gpio_button* button)
     if (button->mechanism == button_mechanism::LATCHING) {
         // Latching button callbacks
         iot_button_register_cb(handle, BUTTON_PRESS_DOWN, NULL, button_switch_latched, button);
+        iot_button_register_cb(handle, BUTTON_PRESS_UP, NULL, button_switch_unlatched, button);
     }
 
     if (button->mechanism == button_mechanism::MOMENTARY) {
@@ -230,7 +226,7 @@ btn_handle_t button_init(gpio_button* button)
  * @return ESP_ERR_NO_MEM if button storage exceeded.
  * @return ESP_FAIL if node or endpoint creation fails.
  */
-esp_err_t create_button(struct gpio_button* button, node_t* node)
+esp_err_t create_button(node_t* node, struct gpio_button* button)
 {
     if (configured_buttons >= CONFIG_BUTTON_COUNT) {
         ESP_LOGE(TAG, "Button storage full. Cannot create more buttons. Max: %d", CONFIG_BUTTON_COUNT);
@@ -249,29 +245,25 @@ esp_err_t create_button(struct gpio_button* button, node_t* node)
 
     // Create switch endpoint with the switch cluster configuration.
     endpoint_t* endpoint = generic_switch::create(node, &switch_config, ENDPOINT_FLAG_NONE, button_handle);
-    static uint16_t generic_switch_endpoint_id = endpoint::get_id(endpoint);
-    
+    if (endpoint == nullptr) {
+        ESP_LOGE(TAG, "Failed to create switch endpoint for button on GPIO %d", button->gpio_pin);
+        return ESP_FAIL;
+    }
+
+    cluster_t* cluster = cluster::get(endpoint, Switch::Id);
     cluster_t* descriptor = cluster::get(endpoint, Descriptor::Id);
     descriptor::feature::taglist::add(descriptor);
 
-    ESP_LOGI(TAG, "Generic Switch created with endpoint_id %d", generic_switch_endpoint_id);
-
-    // These node and endpoint handles can be used to create/add other endpoints and clusters
-    if (!node || !endpoint)
-    {
-        ESP_LOGE(TAG, "Matter node creation failed");
-        return ESP_FAIL;
-    }
+    ESP_LOGI(TAG, "Generic Switch created with endpoint_id %d", endpoint::get_id(endpoint));
 
     // Save the button and endpoint in the button storage
     button_list[configured_buttons].button = button;
     button_list[configured_buttons].endpoint = endpoint::get_id(endpoint);
     ++configured_buttons;
 
-    /* Add additional features to the node */
-    cluster_t* cluster = cluster::get(endpoint, Switch::Id);
-
-    if (button->mechanism == button_mechanism::LATCHING) {
+    // Add additional features to the endpoint
+    if (button->mechanism == button_mechanism::MOMENTARY) {
+        // For momentary switches, we will use the newer 'action switch' feature
         cluster::switch_cluster::feature::action_switch::add(cluster);
     
         if (button->feature_double_click) {
@@ -288,6 +280,9 @@ esp_err_t create_button(struct gpio_button* button, node_t* node)
             ESP_LOGI(TAG, "Enabling long-press feature for momentary switches");
             cluster::switch_cluster::feature::momentary_switch_long_press::add(cluster);
         }
+    } else if (button->mechanism == button_mechanism::LATCHING) {
+        // Latching switches (mutally exclusive with momentary)
+        cluster::switch_cluster::feature::latching_switch::add(cluster);
     }
 
     return ESP_OK;
@@ -308,7 +303,7 @@ esp_err_t create_button(struct gpio_button* button, node_t* node)
  * @param node            Pointer to the node to associate with the button.
  * @return esp_err_t      ESP_OK on success, ESP_ERR_NO_MEM if storage is full, or other error codes.
  */
-esp_err_t create_button(int pin_number, button_mechanism mechanism, bool dbl, bool lpress, node_t* node)
+esp_err_t create_button(node_t* node, int pin_number, button_mechanism mechanism, bool dbl, bool lpress)
 {
     if (configured_buttons >= CONFIG_BUTTON_COUNT) {
         ESP_LOGE(TAG, "Button storage full. Cannot create more buttons. Max: %d", CONFIG_BUTTON_COUNT);
@@ -321,7 +316,7 @@ esp_err_t create_button(int pin_number, button_mechanism mechanism, bool dbl, bo
     btn->feature_double_click = dbl;
     btn->feature_long_press = lpress;
 
-    return create_button(btn, node);
+    return create_button(node, btn);
 }
 
 /**
@@ -335,6 +330,7 @@ esp_err_t create_button(int pin_number, button_mechanism mechanism, bool dbl, bo
  */
 int get_button_endpoint(gpio_button* button)
 {
+    // FIXME: move the endpoint_id to the gpio_button struct - this is pointless
     for (int i = 0; i < configured_buttons; i++) {
         if (button_list[i].button == button) {
             return button_list[i].endpoint;
@@ -413,7 +409,7 @@ void create_application_buttons(node_t* node)
                          enable_double_click, enable_long_press, pin);
 
                 // Create the button with the parsed features
-                create_button(pin, mechanism, enable_double_click, enable_long_press, node);
+                create_button(node, pin, mechanism, enable_double_click, enable_long_press);
             }
             token = strtok(nullptr, " ");
         }

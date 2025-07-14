@@ -1,4 +1,4 @@
- menu "Application"
+menu "Omni"
 
 	menu "Switch"
 		config APP_BUTTON_ENABLED
@@ -37,6 +37,30 @@
 
 	endmenu
 
+	menu "Sensor"
+		config APP_SENSOR_ENABLED
+			bool "Sensor feature enabled"
+			default n
+			help
+				Enables binary sensors that are considered enabled when supplying voltage to a GPIO pin.
+		
+		config SENSOR_GPIO_LIST
+			depends on APP_SENSOR_ENABLED
+			string "Sensor GPIO list"
+			default "O34"
+			help
+				A space-separated list of switch specifications.
+				O34  - Occupancy sensor on pin 34
+				OI34 - Occupancy sensor on pin 34 with logic inverted
 
+		config SENSOR_COUNT
+			depends on APP_SENSOR_ENABLED
+			int "Numer of items in GPIO list"
+			default 1
+			range 1 50
+			help
+				This is the memory size for sensor storage. Set to the number of elements in the GPIO list.
+		
+	endmenu
 
 endmenu

@@ -70,6 +70,17 @@ Building Apps
 	idf.py build 
 	idf.py -p /dev/ttyACM0 flash monitor
 
+Applications
+------------
+### Omni
+The "Omni" app is designed to be a general-purpose configurable application that allows you to quickly build a device
+with switches, buttons and binary sensors on a GPIO by simply setting which device is connected to which GPIO.
+
+The ESP-Matter SDK uses a KConfig system to generate environment variables which define your project configuration.
+The default files include a working set of configuration, but to add Matter endpoints to the application, you need to
+invoke the `menuconfig` system and set pin configuration, etc in the `Omni` menu.
+
+    idf.py menuconfig
 
 Matter Console
 --------------
@@ -94,10 +105,4 @@ Completely wipe the device including NVS partitions (good way to unpair):
     # Re-flash:
     idf.py -p /dev/ttyACM0 flash monitor
 
-Menu Config
------------
-The ESP-Matter SDK uses a KConfig system to generate environment variables which define your project configuration.
-The default files include a working set of configuration, but to add Matter endpoints to the application, you need to
-invoke the `menuconfig` system and set pin configuration, etc in the `Application` menu.
 
-    idf.py menuconfig

@@ -1,17 +1,30 @@
 #pragma once
 
+#include <stdlib.h>
+#include <string.h>
+
+#include <esp_log.h>
 #include <esp_err.h>
 #include <esp_matter.h>
+#include <iot_button.h>
+#include <button_gpio.h>
 #include <hal/gpio_types.h>
+#include <app-common/zap-generated/attributes/Accessors.h>
 
 #if CHIP_DEVICE_CONFIG_ENABLE_THREAD
-#include "esp_openthread_types.h"
+#include <esp_openthread_types.h>
 #endif
 
 enum class button_mechanism: uint8_t
 {
     MOMENTARY = 0,
     LATCHING  = 1,
+};
+
+enum class switch_latch_position: uint8_t
+{
+    OPEN   = 0,
+    CLOSED = 1,
 };
 
 struct gpio_button
@@ -86,42 +99,3 @@ void create_application_buttons(node_t* node);
  * @return NULL in case of failure.
  */
 btn_handle_t button_init(gpio_button* button = NULL);
-
-/** 
- * Driver Update
- *
- * This API should be called to update the driver for the attribute being updated.
- * This is usually called from the common `app_attribute_update_cb()`.
- *
- * @param[in] endpoint_id Endpoint ID of the attribute.
- * @param[in] cluster_id Cluster ID of the attribute.
- * @param[in] attribute_id Attribute ID of the attribute.
- * @param[in] val Pointer to `esp_matter_attr_val_t`. Use appropriate elements as per the value type.
- *
- * @return ESP_OK on success.
- * @return error in case of failure.
- */
-esp_err_t button_attribute_update(
-    btn_handle_t driver_handle, 
-    uint16_t endpoint_id, 
-    uint32_t cluster_id,
-    uint32_t attribute_id, 
-    esp_matter_attr_val_t* val
-);
-
-#if CHIP_DEVICE_CONFIG_ENABLE_THREAD
-#define ESP_OPENTHREAD_DEFAULT_RADIO_CONFIG()                                           \
-    {                                                                                   \
-        .radio_mode = RADIO_MODE_NATIVE,                                                \
-    }
-
-#define ESP_OPENTHREAD_DEFAULT_HOST_CONFIG()                                            \
-    {                                                                                   \
-        .host_connection_mode = HOST_CONNECTION_MODE_NONE,                              \
-    }
-
-#define ESP_OPENTHREAD_DEFAULT_PORT_CONFIG()                                            \
-    {                                                                                   \
-        .storage_partition_name = "nvs", .netif_queue_size = 10, .task_queue_size = 10, \
-    }
-#endif

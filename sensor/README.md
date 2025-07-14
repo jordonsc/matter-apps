@@ -1,3 +1,0 @@
-# Matter Sensors
-
-WIP.
