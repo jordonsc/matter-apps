@@ -73,6 +73,9 @@ Building Apps
 Applications
 ------------
 ### Omni
+
+* [Omni Application documentation](omni/README.md)
+
 The "Omni" app is designed to be a general-purpose configurable application that allows you to quickly build a device
 with switches, buttons and binary sensors on a GPIO by simply setting which device is connected to which GPIO.
 
