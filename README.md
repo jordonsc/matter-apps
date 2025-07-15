@@ -121,12 +121,24 @@ toggle the endpoint itself and you won't be able to toggle the physical switch e
 A push-button is appropriate, each push can toggle the state of the On/Off, or it can be toggled by the controller.
 
 ### Sensor
-The sensor is a binary sensor, read-only to the control plane and intended to describe the state of a physical sensor.
-The only implementation of this is an "occupancy" sensor, which is really the only binary type of sensor in the Matter
-cluster specification.
+The sensor feature provides binary sensors that are read-only to the control plane and describe the state of physical 
+sensors connected to GPIO pins.
 
-An occupancy sensor can have sub-types, such as PIR, ultrasonic, radar, visual, RF, etc but as the controller doesn't
-really care, this implementation just leaves it generic.
+Two types of binary sensors are supported:
+
+**Occupancy Sensor** - Uses the Matter OccupancySensing cluster, which is the standard binary sensor type in the 
+Matter specification. This is ideal for motion detectors, door/window sensors, or any physical presence detection.
+
+**Generic Sensor** - Uses the Matter BooleanState cluster, providing a more flexible binary sensor that can represent 
+any on/off state. This is useful for custom sensors or binary inputs that don't fit the occupancy model.
+
+Both sensor types support inverted logic for flexibility with different sensor wiring configurations.
+
+Configuration examples:
+- `O34` - Occupancy sensor on GPIO 34
+- `OI34` - Occupancy sensor on GPIO 34 with inverted logic
+- `G12` - Generic sensor (BooleanState) on GPIO 12  
+- `GI12` - Generic sensor on GPIO 12 with inverted logic
 
 ### Reset
 The reset feature is important, it allows you to "factory reset" the device but suppressing a button for a configurable

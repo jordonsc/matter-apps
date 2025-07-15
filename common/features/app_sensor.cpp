@@ -59,19 +59,30 @@ static void sensor_button_handler(void* button_handle, void* usr_data)
         );
 
         esp_matter_attr_val_t val = esp_matter_bool(sensor->state);
-        attribute::update(
-            sensor->endpoint,
-            OccupancySensing::Id,
-            OccupancySensing::Attributes::Occupancy::Id, 
-            &val
-        );
+        
+        // Update the appropriate cluster based on sensor type
+        if (sensor->type == sensor_type::OCCUPANCY) {
+            attribute::update(
+                sensor->endpoint,
+                OccupancySensing::Id,
+                OccupancySensing::Attributes::Occupancy::Id, 
+                &val
+            );
+        } else if (sensor->type == sensor_type::GENERIC) {
+            attribute::update(
+                sensor->endpoint,
+                BooleanState::Id,
+                BooleanState::Attributes::StateValue::Id, 
+                &val
+            );
+        }
     }
 }
 
 /**
  * Create a sensor from a GPIO pin.
  * 
- * Note that this assumes an occupancy sensor, no other sensor types are currently supported.
+ * Supports both occupancy sensors and generic sensors using BooleanState cluster.
  * 
  * This implementation uses the iot_button component instead of raw GPIO ISR for better debouncing and power 
  * management.
@@ -81,26 +92,38 @@ static void sensor_button_handler(void* button_handle, void* usr_data)
  */
 void create_sensor(node_t* node, gpio_sensor* sensor)
 {
-    ESP_LOGI(TAG, "Creating occupancy sensor on GPIO %d", sensor->gpio_pin);
-
-    // The config here is for backwards compatibility with the old API. 
-    // It doesn't cover all new features, so ignore the values.
-    occupancy_sensor::config_t config;
-    config.occupancy_sensing.occupancy_sensor_type = chip::to_underlying(
-        OccupancySensing::OccupancySensorTypeEnum::kPir
-    );
-    config.occupancy_sensing.occupancy_sensor_type_bitmap = chip::to_underlying(
-        OccupancySensing::OccupancySensorTypeBitmap::kPir
-    );
+    endpoint_t* sensor_endpoint = nullptr;
     
-    // Set feature flags for the occupancy sensor
-    // Again, nothing here is actually used, but we could populate this (and features) with the subtype.
-    config.occupancy_sensing.feature_flags = chip::to_underlying(
-        OccupancySensing::Feature::kOther
-    );
+    if (sensor->type == sensor_type::OCCUPANCY) {
+        ESP_LOGI(TAG, "Creating occupancy sensor on GPIO %d", sensor->gpio_pin);
 
-    // Create the sensor endpoint
-    endpoint_t* sensor_endpoint = occupancy_sensor::create(node, &config, ENDPOINT_FLAG_NONE, sensor);
+        // The config here is for backwards compatibility with the old API. 
+        // It doesn't cover all new features, so ignore the values.
+        occupancy_sensor::config_t config;
+        config.occupancy_sensing.occupancy_sensor_type = chip::to_underlying(
+            OccupancySensing::OccupancySensorTypeEnum::kPir
+        );
+        config.occupancy_sensing.occupancy_sensor_type_bitmap = chip::to_underlying(
+            OccupancySensing::OccupancySensorTypeBitmap::kPir
+        );
+        
+        // Set feature flags for the occupancy sensor
+        config.occupancy_sensing.feature_flags = chip::to_underlying(
+            OccupancySensing::Feature::kOther
+        );
+
+        // Create the occupancy sensor endpoint
+        sensor_endpoint = occupancy_sensor::create(node, &config, ENDPOINT_FLAG_NONE, sensor);
+    } else if (sensor->type == sensor_type::GENERIC) {
+        ESP_LOGI(TAG, "Creating generic sensor on GPIO %d", sensor->gpio_pin);
+
+        // Create a contact sensor endpoint (which uses BooleanState cluster)
+        contact_sensor::config_t config;
+        
+        // Create the contact sensor endpoint
+        sensor_endpoint = contact_sensor::create(node, &config, ENDPOINT_FLAG_NONE, sensor);
+    }
+    
     if (sensor_endpoint == nullptr) {
         ESP_LOGE(TAG, "Failed to create sensor endpoint for GPIO %d", sensor->gpio_pin);
         return;
@@ -109,10 +132,6 @@ void create_sensor(node_t* node, gpio_sensor* sensor)
 
     cluster_t* descriptor = cluster::get(sensor_endpoint, Descriptor::Id);
     descriptor::feature::taglist::add(descriptor);
-
-    // Occupancy sensor sub-type(s)
-    //cluster_t* cluster = cluster::get(sensor_endpoint, OccupancySensing::Id);
-    //cluster::occupancy_sensing::feature::radar::add(cluster);
 
     ESP_LOGI(TAG, "Sensor created with endpoint_id %d", sensor->endpoint);
 
@@ -175,9 +194,11 @@ void create_application_sensors(node_t* node)
 {    
     // Parse CONFIG_SENSOR_GPIO_LIST for a list of GPIO pins to create sensors.
     // This is a space-separated list of GPIO pin definitions.
-    // Example: CONFIG_SENSOR_GPIO_LIST="OI34"
+    // Example: CONFIG_SENSOR_GPIO_LIST="OI34 G12"
     // O34  - Occupancy sensor on pin 34
     // OI34 - Occupancy sensor on pin 34 with logic inverted
+    // G12  - Generic sensor (BooleanState cluster) on pin 12
+    // GI12 - Generic sensor on pin 12 with logic inverted
 
     const char* gpio_list_str = CONFIG_SENSOR_GPIO_LIST;
     if (gpio_list_str && gpio_list_str[0] != '\0') {
@@ -201,7 +222,10 @@ void create_application_sensors(node_t* node)
             int idx = 0;
             if (token[idx] == 'O') {
                 type = sensor_type::OCCUPANCY;
-                idx++;
+                ++idx;
+            } else if (token[idx] == 'G') {
+                type = sensor_type::GENERIC;
+                ++idx;
             } else {
                 ESP_LOGW(TAG, "Unknown mechanism in sensor definition: '%s' - skipping", token);
                 token = strtok(nullptr, " ");
@@ -213,7 +237,7 @@ void create_application_sensors(node_t* node)
                 if (token[idx] == 'I') {
                     inverted = true;
                 }
-                idx++;
+                ++idx;
             }
 
             // Parse pin number
@@ -223,7 +247,8 @@ void create_application_sensors(node_t* node)
             } else {
                 ESP_LOGI(
                     TAG, "Creating sensor: type=%s, inverted=%d, pin=%d",
-                    type == sensor_type::OCCUPANCY ? "OCCUPANCY" : "UNKNOWN",
+                    type == sensor_type::OCCUPANCY ? "OCCUPANCY" : 
+                    type == sensor_type::GENERIC ? "GENERIC" : "UNKNOWN",
                     inverted, 
                     pin
                 );
@@ -239,7 +264,6 @@ void create_application_sensors(node_t* node)
                 sensor->inverted = inverted;
                 sensor->state = false;
                 sensor->type = type;
-                sensor->subtype = sensor_subtype::GENERAL;  // maybe one day this will be useful; HASS doesn't use it
 
                 create_sensor(node, sensor);
             }
@@ -278,12 +302,27 @@ void sync_sensor_states(void)
         gpio_sensor* sensor = &sensor_storage[i];
         if (sensor->button_handle != nullptr) {
             esp_matter_attr_val_t val = esp_matter_bool(sensor->state);
-            esp_err_t ret = attribute::update(
-                sensor->endpoint,
-                OccupancySensing::Id,
-                OccupancySensing::Attributes::Occupancy::Id, 
-                &val
-            );
+            esp_err_t ret;
+            
+            // Update the appropriate cluster based on sensor type
+            if (sensor->type == sensor_type::OCCUPANCY) {
+                ret = attribute::update(
+                    sensor->endpoint,
+                    OccupancySensing::Id,
+                    OccupancySensing::Attributes::Occupancy::Id, 
+                    &val
+                );
+            } else if (sensor->type == sensor_type::GENERIC) {
+                ret = attribute::update(
+                    sensor->endpoint,
+                    BooleanState::Id,
+                    BooleanState::Attributes::StateValue::Id, 
+                    &val
+                );
+            } else {
+                ESP_LOGW(TAG, "Unknown sensor type for endpoint %d, skipping sync", sensor->endpoint);
+                continue;
+            }
             
             if (ret == ESP_OK) {
                 ESP_LOGI(TAG, "Synced sensor endpoint %d to state %s", 

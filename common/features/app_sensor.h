@@ -11,21 +11,10 @@ using namespace esp_matter;
 enum class sensor_type: uint8_t
 {
     OCCUPANCY = 0,
+    GENERIC = 1,
 };
 
-enum class sensor_subtype: uint16_t
-{
-    GENERAL = 0,
 
-    // Occupancy sensor subtypes
-    PIR,
-    AIR,
-    PHYSICAL,
-    ULTRASONIC,
-    RADAR,
-    RF,
-    VISION,
-};
 
 struct gpio_sensor
 {
@@ -34,7 +23,6 @@ struct gpio_sensor
     bool state = false;
     bool inverted = false;
     sensor_type type = sensor_type::OCCUPANCY;
-    sensor_subtype subtype = sensor_subtype::GENERAL;
     button_handle_t button_handle = nullptr;
 };
 

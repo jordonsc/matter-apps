@@ -93,16 +93,19 @@ menu "Omni"
 			bool "Sensor feature enabled"
 			default n
 			help
-				Enables binary sensors that are considered enabled when supplying voltage to a GPIO pin.
+				Enables binary sensors that are triggered by GPIO pin state changes.
+				Supports occupancy sensors (OccupancySensing cluster) and generic sensors (BooleanState cluster).
 		
 		config SENSOR_GPIO_LIST
 			depends on APP_SENSOR_ENABLED
 			string "Sensor GPIO list"
 			default "O34"
 			help
-				A space-separated list of switch specifications.
+				A space-separated list of sensor specifications.
 				O34  - Occupancy sensor on pin 34
 				OI34 - Occupancy sensor on pin 34 with logic inverted
+				G12  - Generic sensor (BooleanState cluster) on pin 12
+				GI12 - Generic sensor on pin 12 with logic inverted
 
 		config SENSOR_COUNT
 			depends on APP_SENSOR_ENABLED
