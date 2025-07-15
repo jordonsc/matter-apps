@@ -2,6 +2,7 @@ Matter Applications
 ===================
 This repo contains a collection of simple ESP32-based Matter devices.
 
+
 Matter Certification
 --------------------
 These devices are configured to use the testing Matter certification by default. This will lead to the device 
@@ -9,10 +10,12 @@ initially showing as a "TEST DEVICE" after commissioning (it can then be renamed
 
 To change this, or the credentials required (QR/manual code) to commission, you need a proper Matter certification.
 
+
 Reading Materials
 -----------------
 * [Matter Specifications](https://handbook.buildwithmatter.com/specification/)
 * [Kconfig Example](https://github.com/espressif/esp-idf/blob/master/examples/common_components/protocol_examples_common/Kconfig.projbuild)
+
 
 Getting Started
 ---------------
@@ -53,6 +56,7 @@ For Linux (Ubuntu) users:
 	. ./export.sh
 	cd ..
 
+
 Building Apps
 -------------
 
@@ -70,11 +74,10 @@ Building Apps
 	idf.py build 
 	idf.py -p /dev/ttyACM0 flash monitor
 
+
 Applications
 ------------
 ### Omni
-
-* [Omni Application documentation](omni/README.md)
 
 The "Omni" app is designed to be a general-purpose configurable application that allows you to quickly build a device
 with switches, buttons and binary sensors on a GPIO by simply setting which device is connected to which GPIO.
@@ -85,6 +88,9 @@ invoke the `menuconfig` system and set pin configuration, etc in the `Omni` menu
 
     idf.py menuconfig
 
+* [Omni Application documentation](omni/README.md)
+
+
 Matter Console
 --------------
 When the `monitor` command comes online, you actually have a serial command console to the device. Some useful
@@ -94,6 +100,7 @@ commands:
 	matter onboardingcodes ble
 
 > Note that until you've completed Matter certification, you will need to use the TESTING DEVICE onboarding codes.
+
 
 Features
 --------
@@ -152,6 +159,7 @@ will be ready for commissioning again.
 
 This is the only way to recommission a device without reflashing it.
 
+
 Troubleshooting
 ---------------
 If a build failed, it will refuse to do a `fullclean`. Fix this by deleting the build directory:
@@ -166,3 +174,7 @@ Completely wipe the device including NVS partitions (good way to unpair):
     idf.py -p /dev/ttyACM0 flash monitor
 
 
+To-Do
+-----
+* Power-on behaviour on startup
+* Low-power mode

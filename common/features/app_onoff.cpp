@@ -78,25 +78,20 @@ static void onoff_button_handler(void* button_handle, void* usr_data)
  */
 void create_onoff_device(node_t* node, gpio_onoff* onoff)
 {
-    ESP_LOGI(TAG, "Creating on/off device on GPIO %d", onoff->gpio_pin);
-
     endpoint_t* onoff_endpoint = nullptr;
     
     // Create the appropriate endpoint based on device type
     switch (onoff->type) {
         case onoff_type::LIGHT: {
+            ESP_LOGI(TAG, "Creating on/off <light> on GPIO %d", onoff->gpio_pin);
             on_off_light::config_t config;
             onoff_endpoint = on_off_light::create(node, &config, ENDPOINT_FLAG_NONE, onoff);
             break;
         }
         case onoff_type::OUTLET: {
+            ESP_LOGI(TAG, "Creating on/off <outlet> on GPIO %d", onoff->gpio_pin);
             on_off_plugin_unit::config_t config;
             onoff_endpoint = on_off_plugin_unit::create(node, &config, ENDPOINT_FLAG_NONE, onoff);
-            break;
-        }
-        case onoff_type::SWITCH: {
-            generic_switch::config_t config;
-            onoff_endpoint = generic_switch::create(node, &config, ENDPOINT_FLAG_NONE, onoff);
             break;
         }
         default:
@@ -176,7 +171,6 @@ void create_application_onoff_devices(node_t* node)
     // Example: CONFIG_ONOFF_GPIO_LIST="L34:12 O22 S16"
     // L34    - Light on pin 34
     // O22    - Outlet on pin 22
-    // S16    - Switch on pin 16
     // L34:12 - Light on pin 34 with output on pin 12
 
     const char* gpio_list_str = CONFIG_ONOFF_GPIO_LIST;
@@ -200,13 +194,10 @@ void create_application_onoff_devices(node_t* node)
             int idx = 0;
             if (token[idx] == 'L') {
                 type = onoff_type::LIGHT;
-                idx++;
+                ++idx;
             } else if (token[idx] == 'O') {
                 type = onoff_type::OUTLET;
-                idx++;
-            } else if (token[idx] == 'S') {
-                type = onoff_type::SWITCH;
-                idx++;
+                ++idx;
             } else {
                 ESP_LOGW(TAG, "Unknown device type in on/off definition: '%s' - skipping", token);
                 token = strtok(nullptr, " ");
@@ -237,7 +228,6 @@ void create_application_onoff_devices(node_t* node)
                 switch (type) {
                     case onoff_type::LIGHT: type_str = "LIGHT"; break;
                     case onoff_type::OUTLET: type_str = "OUTLET"; break;
-                    case onoff_type::SWITCH: type_str = "SWITCH"; break;
                     default: type_str = "UNKNOWN"; break;
                 }
                 

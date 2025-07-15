@@ -77,7 +77,6 @@ menu "Omni"
 				A space-separated list of on/off device specifications.
 				L34    - Light on pin 34
 				O22    - Outlet on pin 22
-				S16    - Switch on pin 16
 				L34:12 - Light on pin 34 with output on pin 12
 
 		config ONOFF_COUNT

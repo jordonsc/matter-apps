@@ -53,12 +53,10 @@ ONOFF_GPIO_LIST="L34:12 O22 S16:9"
 Where:
 - `L34:12` - Light on GPIO 34 with output on GPIO 12
 - `O22` - Outlet on GPIO 22 (no output pin)
-- `S16:9` - Switch on GPIO 16 with output on GPIO 9
 
 ### Device Types
 - **L** - Light
 - **O** - Outlet
-- **S** - Switch
 
 ### Output Pin Behavior
 - Output pin is set HIGH when the device state is ON

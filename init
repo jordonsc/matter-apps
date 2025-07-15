@@ -77,6 +77,16 @@ else
     echo "Warning: ESP-Matter export script not found at $ESP_MATTER_EXPORT"
 fi
 
+# Some helpers
+alias idf="idf.py"
+alias menu="idf.py menuconfig"
+alias build="idf.py build"
+alias flash="idf.py -p /dev/ttyACM0 flash monitor"
+alias bfm="idf.py -p /dev/ttyACM0 build flash monitor"
+alias target="idf.py set-target"
+alias nuke="esptool.py -p /dev/ttyACM0 erase_flash"
+alias help="echo 'Available commands: idf, menu, build, flash, bfm, target, nuke, help'"
+
 echo
 echo "Environment setup complete!"
 echo "Note: Environment variables are now available in your current shell."
