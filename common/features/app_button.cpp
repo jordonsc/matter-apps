@@ -1,5 +1,13 @@
 #include "app_button.h"
 
+#ifndef CONFIG_BUTTON_COUNT
+#define CONFIG_BUTTON_COUNT 0
+#endif
+
+#ifndef CONFIG_BUTTON_GPIO_LIST
+#define CONFIG_BUTTON_GPIO_LIST ""
+#endif
+
 using namespace chip::app::Clusters;
 using namespace esp_matter;
 using namespace esp_matter::cluster;

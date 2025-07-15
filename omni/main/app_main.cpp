@@ -8,7 +8,6 @@
 
 #include <common_macros.h>
 #include <enable_esp_insights.h>
-#include <app_reset.h>
 #include <app/util/attribute-storage.h>
 
 #if CHIP_DEVICE_CONFIG_ENABLE_THREAD
@@ -18,6 +17,11 @@
 
 // Random bits of the Matter stack (event messages, etc)
 #include <app_matter.h>
+
+#if CONFIG_APP_RESET_ENABLED
+// Factory reset handling
+#include <app_reset.h>
+#endif
 
 #if CONFIG_APP_BUTTON_ENABLED
 // Button handling
@@ -47,6 +51,14 @@ extern "C" void app_main()
     node::config_t node_config;
     node_t* node = node::create(&node_config, app_attribute_update_cb, app_identification_cb);
     ABORT_APP_ON_FAILURE(node != nullptr, ESP_LOGE(TAG, "Failed to create Matter node"));
+
+#if CONFIG_APP_RESET_ENABLED
+    // Register reset button commands
+    if (register_app_reset() != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to register app reset commands");
+        return;
+    }
+#endif
 
 #if CONFIG_APP_BUTTON_ENABLED
     // Create button endpoints

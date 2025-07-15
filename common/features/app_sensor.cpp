@@ -1,6 +1,14 @@
 #include "app_sensor.h"
 #include <button_gpio.h>
 
+#ifndef CONFIG_SENSOR_COUNT
+#define CONFIG_SENSOR_COUNT 0
+#endif
+
+#ifndef CONFIG_SENSOR_GPIO_LIST
+#define CONFIG_SENSOR_GPIO_LIST ""
+#endif
+
 using namespace chip::app::Clusters;
 using namespace esp_matter;
 using namespace esp_matter::cluster;
@@ -128,16 +136,6 @@ void create_sensor(node_t* node, gpio_sensor* sensor)
         return;
     }
     
-    // Read the current GPIO state and set the initial sensor state
-    bool current_gpio_state = gpio_get_level(sensor->gpio_pin);
-    sensor->state = sensor->inverted ? !current_gpio_state : current_gpio_state;
-    
-    ESP_LOGI(TAG, "Sensor initialized with state %s (GPIO=%s, inverted=%s)", 
-        sensor->state ? "HIGH" : "LOW",
-        current_gpio_state ? "HIGH" : "LOW",
-        sensor->inverted ? "true" : "false"
-    );
-    
     // Register callbacks for button press/release events
     ret = iot_button_register_cb(sensor->button_handle, BUTTON_PRESS_DOWN, nullptr, sensor_button_handler, sensor);
     if (ret != ESP_OK) {
@@ -239,6 +237,7 @@ void create_application_sensors(node_t* node)
                 gpio_sensor* sensor = &sensor_storage[configured_sensors++];
                 sensor->gpio_pin = (gpio_num_t)pin;
                 sensor->inverted = inverted;
+                sensor->state = false;
                 sensor->type = type;
                 sensor->subtype = sensor_subtype::GENERAL;  // maybe one day this will be useful; HASS doesn't use it
 

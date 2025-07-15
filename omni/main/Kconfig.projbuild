@@ -8,7 +8,7 @@ menu "Omni"
 		
 		config RESET_GPIO_PIN
 			depends on APP_RESET_ENABLED
-			string "Reset button GPIO pin"
+			int "Reset button GPIO pin"
 			default 0
 			range 0 50
 			help
