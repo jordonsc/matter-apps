@@ -18,6 +18,17 @@ static const char* TAG = "app_button";
 static uint16_t configured_buttons = 0;
 static struct gpio_button button_storage[CONFIG_BUTTON_COUNT];
 
+/**
+ * Update the output pin state based on button state
+ */
+static void update_button_output_pin(gpio_button* button, bool state)
+{
+    if (button->output_pin != GPIO_NUM_NC) {
+        gpio_set_level(button->output_pin, state ? 1 : 0);
+        ESP_LOGD(TAG, "Button endpoint %d output pin %d set to %s", 
+                 button->endpoint, button->output_pin, state ? "HIGH" : "LOW");
+    }
+}
 
 /**
  * Unified button event handler for all iot_button events.
@@ -31,6 +42,7 @@ static void button_event_handler(void* button_handle, void* usr_data)
     switch (event) {
         case BUTTON_PRESS_DOWN:
             ESP_LOGI(TAG, "Button [%d]: DOWN", button->gpio_pin);
+            update_button_output_pin(button, true);
             if (button->mechanism == button_mechanism::LATCHING) {
                 // Latching switch pressed down (latched)
                 chip::DeviceLayer::SystemLayer().ScheduleLambda([switch_endpoint_id]() {
@@ -48,6 +60,7 @@ static void button_event_handler(void* button_handle, void* usr_data)
             
         case BUTTON_PRESS_UP:
             ESP_LOGI(TAG, "Button [%d]: UP", button->gpio_pin);
+            update_button_output_pin(button, false);
             if (button->mechanism == button_mechanism::LATCHING) {
                 // Latching switch released (unlatched)
                 chip::DeviceLayer::SystemLayer().ScheduleLambda([switch_endpoint_id]() {
@@ -205,6 +218,14 @@ void create_button(node_t* node, gpio_button* button)
 
     ESP_LOGI(TAG, "Generic Switch created with endpoint_id %d", button->endpoint);
 
+    // Initialize output pin if configured
+    if (button->output_pin != GPIO_NUM_NC) {
+        gpio_reset_pin(button->output_pin);
+        gpio_set_direction(button->output_pin, GPIO_MODE_OUTPUT);
+        gpio_set_level(button->output_pin, 0);  // Start with output LOW
+        ESP_LOGI(TAG, "Button output pin %d initialised", button->output_pin);
+    }
+
     // Add additional features to the endpoint
     if (button->mechanism == button_mechanism::MOMENTARY) {
         // For momentary switches, we will use the newer 'action switch' feature
@@ -253,12 +274,13 @@ void create_application_buttons(node_t* node)
 {
     // Parse CONFIG_BUTTON_GPIO_LIST for a list of GPIO pins to create buttons.
     // This is a space-separated list of GPIO pin definitions.
-    // Example: CONFIG_BUTTON_GPIO_LIST="L9 M9 MX8"
-    // L9  - latching on pin 9
-    // M9  - momentary on pin 9
-    // MD9 - momentary-double-click on pin 9
-    // ML9 - momentary-long-press on pin 9
-    // MX9 - momentary-double-click-long-press on pin 9
+    // Example: CONFIG_BUTTON_GPIO_LIST="L9 M9:12 MX8"
+    // L9    - latching on pin 9
+    // M9    - momentary on pin 9
+    // MD9   - momentary-double-click on pin 9
+    // ML9   - momentary-long-press on pin 9
+    // MX9   - momentary-double-click-long-press on pin 9
+    // M9:12 - momentary on pin 9 with output on pin 12
 
     const char* gpio_list_str = CONFIG_BUTTON_GPIO_LIST;
     if (gpio_list_str && gpio_list_str[0] != '\0') {
@@ -306,14 +328,30 @@ void create_application_buttons(node_t* node)
                 idx++;
             }
 
-            // Parse pin number
-            int pin = atoi(token + idx);
+            // Parse pin number and optional output pin (separated by ':')
+            char* pin_spec = token + idx;
+            char* colon_pos = strchr(pin_spec, ':');
+            int pin = -1;
+            int output_pin = -1;
+            
+            if (colon_pos != nullptr) {
+                // Split at the colon
+                *colon_pos = '\0';
+                pin = atoi(pin_spec);
+                output_pin = atoi(colon_pos + 1);
+            } else {
+                pin = atoi(pin_spec);
+            }
+            
             if (pin < 0 || pin >= GPIO_NUM_MAX) {
                 ESP_LOGW(TAG, "GPIO pin %d out of range (0-%d) - skipping", pin, GPIO_NUM_MAX - 1);
+            } else if (output_pin != -1 && (output_pin < 0 || output_pin >= GPIO_NUM_MAX)) {
+                ESP_LOGW(TAG, "Output GPIO pin %d out of range (0-%d) - skipping", output_pin, GPIO_NUM_MAX - 1);
             } else {
-                ESP_LOGI(TAG, "Creating button: mechanism=%s, double_click=%d, long_press=%d, pin=%d",
+                ESP_LOGI(TAG, "Creating button: mechanism=%s, double_click=%d, long_press=%d, pin=%d, output_pin=%s",
                          mechanism == button_mechanism::LATCHING ? "LATCHING" : "MOMENTARY",
-                         enable_double_click, enable_long_press, pin);
+                         enable_double_click, enable_long_press, pin,
+                         output_pin != -1 ? std::to_string(output_pin).c_str() : "none");
 
                 if (configured_buttons >= CONFIG_BUTTON_COUNT) {
                     ESP_LOGE(TAG, "Button storage full. Cannot create more buttons. Max: %d", CONFIG_BUTTON_COUNT);
@@ -323,6 +361,7 @@ void create_application_buttons(node_t* node)
                 // Create the button with the parsed features                
                 gpio_button* button = &button_storage[configured_buttons];
                 button->gpio_pin = (gpio_num_t)pin;
+                button->output_pin = output_pin != -1 ? (gpio_num_t)output_pin : GPIO_NUM_NC;
                 button->mechanism = mechanism;
                 button->feature_double_click = enable_double_click;
                 button->feature_long_press = enable_long_press;

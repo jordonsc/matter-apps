@@ -1,5 +1,4 @@
 #include "app_onoff.h"
-#include <button_gpio.h>
 
 #ifndef CONFIG_ONOFF_COUNT
 #define CONFIG_ONOFF_COUNT 0
@@ -18,6 +17,18 @@ static const char *TAG = "app_onoff";
 
 static uint16_t configured_onoff_devices = 0;
 static struct gpio_onoff onoff_storage[CONFIG_ONOFF_COUNT];
+
+/**
+ * Update the output pin state if configured
+ */
+static void update_onoff_output_pin(gpio_onoff* onoff)
+{
+    if (onoff->output_pin != GPIO_NUM_NC) {
+        gpio_set_level(onoff->output_pin, onoff->state ? 1 : 0);
+        ESP_LOGD(TAG, "OnOff endpoint %d output pin %d set to %s", 
+                 onoff->endpoint, onoff->output_pin, onoff->state ? "HIGH" : "LOW");
+    }
+}
 
 /**
  * Handler for iot_button events.
@@ -43,6 +54,9 @@ static void onoff_button_handler(void* button_handle, void* usr_data)
         onoff->endpoint, onoff->gpio_pin, 
         onoff->state ? "ON" : "OFF"
     );
+
+    // Update output pin if configured
+    update_onoff_output_pin(onoff);
 
     esp_matter_attr_val_t val = esp_matter_bool(onoff->state);
     attribute::update(
@@ -101,6 +115,14 @@ void create_onoff_device(node_t* node, gpio_onoff* onoff)
 
     ESP_LOGI(TAG, "OnOff device created with endpoint_id %d", onoff->endpoint);
 
+    // Initialize output pin if configured
+    if (onoff->output_pin != GPIO_NUM_NC) {
+        gpio_reset_pin(onoff->output_pin);
+        gpio_set_direction(onoff->output_pin, GPIO_MODE_OUTPUT);
+        gpio_set_level(onoff->output_pin, onoff->state ? 1 : 0);
+        ESP_LOGI(TAG, "OnOff output pin %d initialised", onoff->output_pin);
+    }
+
     // Create iot_button for the GPIO pin
     button_config_t button_cfg = {
         .long_press_time = 0,  // Not needed for basic on/off
@@ -151,10 +173,11 @@ void create_application_onoff_devices(node_t* node)
 {    
     // Parse CONFIG_ONOFF_GPIO_LIST for a list of GPIO pins to create on/off devices.
     // This is a space-separated list of GPIO pin definitions.
-    // Example: CONFIG_ONOFF_GPIO_LIST="L34 O22 S16"
-    // L34  - Light on pin 34
-    // O22  - Outlet on pin 22
-    // S16  - Switch on pin 16
+    // Example: CONFIG_ONOFF_GPIO_LIST="L34:12 O22 S16"
+    // L34    - Light on pin 34
+    // O22    - Outlet on pin 22
+    // S16    - Switch on pin 16
+    // L34:12 - Light on pin 34 with output on pin 12
 
     const char* gpio_list_str = CONFIG_ONOFF_GPIO_LIST;
     if (gpio_list_str && gpio_list_str[0] != '\0') {
@@ -190,10 +213,25 @@ void create_application_onoff_devices(node_t* node)
                 continue;
             }
 
-            // Parse pin number
-            int pin = atoi(token + idx);
+            // Parse pin number and optional output pin (separated by ':')
+            char* pin_spec = token + idx;
+            char* colon_pos = strchr(pin_spec, ':');
+            int pin = -1;
+            int output_pin = -1;
+            
+            if (colon_pos != nullptr) {
+                // Split at the colon
+                *colon_pos = '\0';
+                pin = atoi(pin_spec);
+                output_pin = atoi(colon_pos + 1);
+            } else {
+                pin = atoi(pin_spec);
+            }
+            
             if (pin < 0 || pin >= GPIO_NUM_MAX) {
                 ESP_LOGW(TAG, "GPIO pin %d out of range (0-%d) - skipping", pin, GPIO_NUM_MAX - 1);
+            } else if (output_pin != -1 && (output_pin < 0 || output_pin >= GPIO_NUM_MAX)) {
+                ESP_LOGW(TAG, "Output GPIO pin %d out of range (0-%d) - skipping", output_pin, GPIO_NUM_MAX - 1);
             } else {
                 const char* type_str;
                 switch (type) {
@@ -204,8 +242,9 @@ void create_application_onoff_devices(node_t* node)
                 }
                 
                 ESP_LOGI(
-                    TAG, "Creating on/off device: type=%s, pin=%d",
-                    type_str, pin
+                    TAG, "Creating on/off device: type=%s, pin=%d, output_pin=%s",
+                    type_str, pin,
+                    output_pin != -1 ? std::to_string(output_pin).c_str() : "none"
                 );
 
                 if (configured_onoff_devices >= CONFIG_ONOFF_COUNT) {
@@ -216,6 +255,7 @@ void create_application_onoff_devices(node_t* node)
                 // Create the device with the parsed configuration                
                 gpio_onoff* onoff = &onoff_storage[configured_onoff_devices++];
                 onoff->gpio_pin = (gpio_num_t)pin;
+                onoff->output_pin = output_pin != -1 ? (gpio_num_t)output_pin : GPIO_NUM_NC;
                 onoff->state = false;
                 onoff->type = type;
 
@@ -394,6 +434,9 @@ esp_err_t onoff_attribute_update_cb(
         onoff->state = new_state;
         
         ESP_LOGI(TAG, "OnOff endpoint %d updated remotely to state %s", endpoint_id, new_state ? "ON" : "OFF");
+        
+        // Update output pin if configured
+        update_onoff_output_pin(onoff);
         
         // Here you could add additional logic like:
         // - Updating physical outputs (LEDs, relays, etc.)

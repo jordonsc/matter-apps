@@ -37,11 +37,12 @@ menu "Omni"
 			default "M9"
 			help
 				A space-separated list of switch specifications.
-				L9  - latching on pin 9
-				M9  - momentary on pin 9
-				MD9 - momentary-double-click on pin 9
-				ML9 - momentary-long-press on pin 9
-				MX9 - momentary-double-click-long-press on pin 9
+				L9    - latching on pin 9
+				M9    - momentary on pin 9
+				MD9   - momentary-double-click on pin 9
+				ML9   - momentary-long-press on pin 9
+				MX9   - momentary-double-click-long-press on pin 9
+				M9:12 - momentary on pin 9 with output on pin 12
 
 		config BUTTON_COUNT
 			depends on APP_BUTTON_ENABLED
@@ -74,9 +75,10 @@ menu "Omni"
 			default "L34"
 			help
 				A space-separated list of on/off device specifications.
-				L34 - Light on pin 34
-				O22 - Outlet on pin 22
-				S16 - Switch on pin 16
+				L34    - Light on pin 34
+				O22    - Outlet on pin 22
+				S16    - Switch on pin 16
+				L34:12 - Light on pin 34 with output on pin 12
 
 		config ONOFF_COUNT
 			depends on APP_ONOFF_ENABLED
@@ -102,10 +104,11 @@ menu "Omni"
 			default "O34"
 			help
 				A space-separated list of sensor specifications.
-				O34  - Occupancy sensor on pin 34
-				OI34 - Occupancy sensor on pin 34 with logic inverted
-				G12  - Generic sensor (BooleanState cluster) on pin 12
-				GI12 - Generic sensor on pin 12 with logic inverted
+				O34     - Occupancy sensor on pin 34
+				OI34    - Occupancy sensor on pin 34 with logic inverted
+				G12     - Generic sensor (BooleanState cluster) on pin 12
+				GI12    - Generic sensor on pin 12 with logic inverted
+				OI34:9  - Occupancy sensor on pin 34 with logic inverted and output on pin 9
 
 		config SENSOR_COUNT
 			depends on APP_SENSOR_ENABLED

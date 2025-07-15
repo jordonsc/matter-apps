@@ -1,32 +1,190 @@
-# Omni Application
+Matter Applications
+===================
+This repo contains a collection of simple ESP32-based Matter devices.
+
+Matter Certification
+--------------------
+These devices are configured to use the testing Matter certification by default. This will lead to the device 
+initially showing as a "TEST DEVICE" after commissioning (it can then be renamed).
+
+To change this, or the credentials required (QR/manual code) to commission, you need a proper Matter certification.
+
+Reading Materials
+-----------------
+* [Matter Specifications](https://handbook.buildwithmatter.com/specification/)
+* [Kconfig Example](https://github.com/espressif/esp-idf/blob/master/examples/common_components/protocol_examples_common/Kconfig.projbuild)
+
+Getting Started
+---------------
+You'll need a few system packages available, and then both of the ESP-IDF SDK and the ESP-Matter SDK. Both follow
+a similar concept: clone the repo, run an installer to bootstrap your environment and then when working, you need
+to export an "export" file in both repos.
+
+The `init` file in this project root will export both SDKs, once you've done the initial installs:
+
+    # Load the ESP-IDF and ESP-Matter SDKs:
+    . ./init
+
+### System Packages
+For Linux (Ubuntu) users:
+
+	sudo apt install -y cmake gn ninja-build python3.13-venv pkg-config libssl-dev libglib2.0-dev
+	sudo usermod -aG dialout `whoami`
+	newgrp dialout
+
+### ESP IDF
+
+	git clone --recursive https://github.com/espressif/esp-idf.git
+	cd esp-idf
+	git checkout v5.4.1
+	git submodule update --init --recursive
+	./install.sh
+	. ./export.sh
+	cd ..
+
+### ESP Matter
+	
+	git clone --recursive https://github.com/espressif/esp-matter.git
+	git checkout release/v1.4
+	cd ./connectedhomeip/connectedhomeip
+	./scripts/checkout_submodules.py --platform esp32 linux --shallow
+	cd ../..
+	./install.sh
+	. ./export.sh
+	cd ..
+
+Building Apps
+-------------
+
+    # On new terminal - export both SDKs:
+    . ./init
+    cd omni
+	
+    # Configure new target (only do once, or if you delete the `build` directory)
+	idf.py set-target esp32s3		# replace with correct MCU
+
+	# Configure Matter endpoints (see below):
+	idf.py menuconfig
+
+	# Build & flash
+	idf.py build 
+	idf.py -p /dev/ttyACM0 flash monitor
+
+Omni Application
+================
 This application is designed to be configurable from `menuconfig` to add any endpoint type as required. You can mix
 different Matter endpoints as per your device's need.
 
+Configuration Overview
+----------------------
+All features can be configured via `menuconfig`:
+
+`idf.py menuconfig` -> Omni
+
+### Available Features
+- **Reset**: Factory reset functionality via GPIO button
+- **Switch**: Generic Switch endpoints (momentary/latching buttons)  
+- **OnOff**: On/Off devices (lights, outlets, switches)
+- **Sensor**: Binary sensors (occupancy, generic)
+
 ## Switch Configuration
-Switches or buttons can be configured via `menuconfig`.
+Switches or buttons can be configured via `menuconfig` -> Omni -> Switch.
 
-`idf.py menuconfig` -> Application -> Switch
+### GPIO List Format
+The GPIO list uses a space-separated format with optional output pins:
 
-### Switch Type
+```
+BUTTON_GPIO_LIST="M9 L10:12 MX8:13"
+```
 
-* To use latching switch, enable `GENERIC_SWITCH_TYPE_LATCHING`.
-* To use a momentary switch, enable `GENERIC_SWITCH_TYPE_MOMENTARY`.
+Where:
+- `M9` - Momentary button on GPIO 9
+- `L10:12` - Latching switch on GPIO 10 with output on GPIO 12
+- `MX8:13` - Momentary button with double-click and long-press on GPIO 8, output on GPIO 13
 
-The default type is `GENERIC_SWITCH_TYPE_MOMENTARY`.
+### Switch Types and Features
+- **L** - Latching switch
+- **M** - Momentary button (default)
+- **MD** - Momentary with double-click
+- **ML** - Momentary with long-press  
+- **MX** - Momentary with double-click and long-press
 
-### Pin List
-Set the GPIO pins in comma-delimited list:
+### Output Pins
+Output pins are optional and specified after a colon `:`. When configured, the output pin will be:
+- Set HIGH when the button is pressed (for momentary) or latched (for latching)
+- Set LOW when the button is released or unlatched
 
-    # Push button on GPIO 9
-    `9`
+## OnOff Device Configuration
+OnOff devices can be configured via `menuconfig` -> Omni -> OnOff.
 
-    # Or on boot, 9 and 13 as three different endpoints:
-    `0,9,13`
+### GPIO List Format
+```
+ONOFF_GPIO_LIST="L34:12 O22 S16:9"
+```
 
-### Button Responsiveness
-To make a momentary button as responsive as possible, disable double-click and long-press. This will allow you to 
-trigger when button has been initially depressed.
+Where:
+- `L34:12` - Light on GPIO 34 with output on GPIO 12
+- `O22` - Outlet on GPIO 22 (no output pin)
+- `S16:9` - Switch on GPIO 16 with output on GPIO 9
 
-If you enable long-press, you should also enable double-click. This will give your control-plane enough context to
-know which event happened, but with double-click enabled there is a short delay before concluding the click-counter,
-so this option, while the most flexible, will also be less responsive.
+### Device Types
+- **L** - Light
+- **O** - Outlet
+- **S** - Switch
+
+### Output Pin Behavior
+- Output pin is set HIGH when the device state is ON
+- Output pin is set LOW when the device state is OFF
+- State changes from both GPIO input and Matter controller commands update the output pin
+
+## Sensor Configuration
+Binary sensors can be configured via `menuconfig` -> Omni -> Sensor.
+
+### GPIO List Format
+```
+SENSOR_GPIO_LIST="O34:9 GI12:13"
+```
+
+Where:
+- `O34:9` - Occupancy sensor on GPIO 34 with output on GPIO 9
+- `GI12:13` - Generic sensor on GPIO 12 (inverted logic) with output on GPIO 13
+
+### Sensor Types and Options
+- **O** - Occupancy sensor (OccupancySensing cluster)
+- **G** - Generic sensor (BooleanState cluster)
+- **I** - Inverted logic (add after sensor type, e.g., `OI` or `GI`)
+
+### Output Pin Behavior
+- Output pin is set HIGH when sensor is triggered/active
+- Output pin is set LOW when sensor is not triggered/inactive
+- For inverted sensors, the logic is applied before updating the output pin
+
+## Reset Configuration
+Factory reset can be configured via `menuconfig` -> Omni -> Reset.
+
+- **RESET_GPIO_PIN**: GPIO pin for the reset button
+- **RESET_HOLD_TIME**: Time in milliseconds the button must be held
+
+## Examples
+
+### Smart Light Switch
+```
+# Light switch with status LED
+ONOFF_GPIO_LIST="L5:2"
+```
+Creates a light on GPIO 5 with an LED indicator on GPIO 2.
+
+### Motion Sensor with LED
+```
+# Motion sensor with indicator LED
+SENSOR_GPIO_LIST="O18:2"
+```
+Creates an occupancy sensor on GPIO 18 with LED on GPIO 2.
+
+### Multi-button Panel
+```
+# Three buttons with individual LEDs
+BUTTON_GPIO_LIST="M9:12 M10:13 ML11:14"
+```
+Creates three momentary buttons (GPIO 9, 10, 11) with corresponding LED outputs (GPIO 12, 13, 14).
+The third button also supports long-press events.

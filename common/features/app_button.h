@@ -8,6 +8,7 @@
 #include <esp_matter.h>
 #include <iot_button.h>
 #include <button_gpio.h>
+#include <driver/gpio.h>
 #include <hal/gpio_types.h>
 #include <app-common/zap-generated/attributes/Accessors.h>
 
@@ -24,6 +25,7 @@ enum class button_mechanism: uint8_t
 struct gpio_button
 {
     gpio_num_t gpio_pin;
+    gpio_num_t output_pin = GPIO_NUM_NC;  // Optional output pin (GPIO_NUM_NC if not configured)
     uint16_t endpoint;
     button_mechanism mechanism = button_mechanism::MOMENTARY;
     bool feature_double_click = false;

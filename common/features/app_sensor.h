@@ -4,6 +4,7 @@
 #include <esp_log.h>
 #include <esp_matter.h>
 #include <driver/gpio.h>
+#include <button_gpio.h>
 #include <iot_button.h>
 
 using namespace esp_matter;
@@ -19,6 +20,7 @@ enum class sensor_type: uint8_t
 struct gpio_sensor
 {
     gpio_num_t gpio_pin;
+    gpio_num_t output_pin = GPIO_NUM_NC;  // Optional output pin (GPIO_NUM_NC if not configured)
     uint16_t endpoint;
     bool state = false;
     bool inverted = false;

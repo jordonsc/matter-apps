@@ -1,5 +1,4 @@
 #include "app_sensor.h"
-#include <button_gpio.h>
 
 #ifndef CONFIG_SENSOR_COUNT
 #define CONFIG_SENSOR_COUNT 0
@@ -18,6 +17,18 @@ static const char *TAG = "app_sensor";
 
 static uint16_t configured_sensors = 0;
 static struct gpio_sensor sensor_storage[5];
+
+/**
+ * Update the output pin state if configured
+ */
+static void update_sensor_output_pin(gpio_sensor* sensor)
+{
+    if (sensor->output_pin != GPIO_NUM_NC) {
+        gpio_set_level(sensor->output_pin, sensor->state ? 1 : 0);
+        ESP_LOGD(TAG, "Sensor endpoint %d output pin %d set to %s", 
+                 sensor->endpoint, sensor->output_pin, sensor->state ? "HIGH" : "LOW");
+    }
+}
 
 
 /**
@@ -57,6 +68,9 @@ static void sensor_button_handler(void* button_handle, void* usr_data)
             sensor->endpoint, sensor->gpio_pin, 
             sensor->state ? "HIGH" : "LOW"
         );
+
+        // Update output pin if configured
+        update_sensor_output_pin(sensor);
 
         esp_matter_attr_val_t val = esp_matter_bool(sensor->state);
         
@@ -135,6 +149,14 @@ void create_sensor(node_t* node, gpio_sensor* sensor)
 
     ESP_LOGI(TAG, "Sensor created with endpoint_id %d", sensor->endpoint);
 
+    // Initialize output pin if configured
+    if (sensor->output_pin != GPIO_NUM_NC) {
+        gpio_reset_pin(sensor->output_pin);
+        gpio_set_direction(sensor->output_pin, GPIO_MODE_OUTPUT);
+        gpio_set_level(sensor->output_pin, sensor->state ? 1 : 0);
+        ESP_LOGI(TAG, "Sensor output pin %d initialised", sensor->output_pin);
+    }
+
 
     // Create iot_button for the GPIO pin
     button_config_t button_cfg = {
@@ -194,11 +216,12 @@ void create_application_sensors(node_t* node)
 {    
     // Parse CONFIG_SENSOR_GPIO_LIST for a list of GPIO pins to create sensors.
     // This is a space-separated list of GPIO pin definitions.
-    // Example: CONFIG_SENSOR_GPIO_LIST="OI34 G12"
-    // O34  - Occupancy sensor on pin 34
-    // OI34 - Occupancy sensor on pin 34 with logic inverted
-    // G12  - Generic sensor (BooleanState cluster) on pin 12
-    // GI12 - Generic sensor on pin 12 with logic inverted
+    // Example: CONFIG_SENSOR_GPIO_LIST="OI34:9 G12"
+    // O34     - Occupancy sensor on pin 34
+    // OI34    - Occupancy sensor on pin 34 with logic inverted
+    // G12     - Generic sensor (BooleanState cluster) on pin 12
+    // GI12    - Generic sensor on pin 12 with logic inverted
+    // OI34:9  - Occupancy sensor on pin 34 with logic inverted and output on pin 9
 
     const char* gpio_list_str = CONFIG_SENSOR_GPIO_LIST;
     if (gpio_list_str && gpio_list_str[0] != '\0') {
@@ -240,17 +263,33 @@ void create_application_sensors(node_t* node)
                 ++idx;
             }
 
-            // Parse pin number
-            int pin = atoi(token + idx);
+            // Parse pin number and optional output pin (separated by ':')
+            char* pin_spec = token + idx;
+            char* colon_pos = strchr(pin_spec, ':');
+            int pin = -1;
+            int output_pin = -1;
+            
+            if (colon_pos != nullptr) {
+                // Split at the colon
+                *colon_pos = '\0';
+                pin = atoi(pin_spec);
+                output_pin = atoi(colon_pos + 1);
+            } else {
+                pin = atoi(pin_spec);
+            }
+            
             if (pin < 0 || pin >= GPIO_NUM_MAX) {
                 ESP_LOGW(TAG, "GPIO pin %d out of range (0-%d) - skipping", pin, GPIO_NUM_MAX - 1);
+            } else if (output_pin != -1 && (output_pin < 0 || output_pin >= GPIO_NUM_MAX)) {
+                ESP_LOGW(TAG, "Output GPIO pin %d out of range (0-%d) - skipping", output_pin, GPIO_NUM_MAX - 1);
             } else {
                 ESP_LOGI(
-                    TAG, "Creating sensor: type=%s, inverted=%d, pin=%d",
+                    TAG, "Creating sensor: type=%s, inverted=%d, pin=%d, output_pin=%s",
                     type == sensor_type::OCCUPANCY ? "OCCUPANCY" : 
                     type == sensor_type::GENERIC ? "GENERIC" : "UNKNOWN",
                     inverted, 
-                    pin
+                    pin,
+                    output_pin != -1 ? std::to_string(output_pin).c_str() : "none"
                 );
 
                 if (configured_sensors >= CONFIG_SENSOR_COUNT) {
@@ -261,6 +300,7 @@ void create_application_sensors(node_t* node)
                 // Create the sensor with the parsed features                
                 gpio_sensor* sensor = &sensor_storage[configured_sensors++];
                 sensor->gpio_pin = (gpio_num_t)pin;
+                sensor->output_pin = output_pin != -1 ? (gpio_num_t)output_pin : GPIO_NUM_NC;
                 sensor->inverted = inverted;
                 sensor->state = false;
                 sensor->type = type;

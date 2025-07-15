@@ -5,6 +5,7 @@
 #include <esp_matter.h>
 #include <driver/gpio.h>
 #include <iot_button.h>
+#include <button_gpio.h>
 
 using namespace esp_matter;
 
@@ -18,6 +19,7 @@ enum class onoff_type: uint8_t
 struct gpio_onoff
 {
     gpio_num_t gpio_pin;
+    gpio_num_t output_pin = GPIO_NUM_NC;  // Optional output pin (GPIO_NUM_NC if not configured)
     uint16_t endpoint;
     bool state = false;
     onoff_type type = onoff_type::LIGHT;
