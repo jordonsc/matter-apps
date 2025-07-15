@@ -61,6 +61,33 @@ menu "Omni"
 
 	endmenu
 
+	menu "OnOff"
+		config APP_ONOFF_ENABLED
+			bool "OnOff feature enabled"
+			default n
+			help
+				Enables on/off devices (lights, outlets, switches) that can be toggled via GPIO buttons.
+		
+		config ONOFF_GPIO_LIST
+			depends on APP_ONOFF_ENABLED
+			string "OnOff GPIO list"
+			default "L34"
+			help
+				A space-separated list of on/off device specifications.
+				L34 - Light on pin 34
+				O22 - Outlet on pin 22
+				S16 - Switch on pin 16
+
+		config ONOFF_COUNT
+			depends on APP_ONOFF_ENABLED
+			int "Number of items in GPIO list"
+			default 1
+			range 1 50
+			help
+				This is the memory size for on/off device storage. Set to the number of elements in the GPIO list.
+		
+	endmenu
+
 	menu "Sensor"
 		config APP_SENSOR_ENABLED
 			bool "Sensor feature enabled"

@@ -84,7 +84,7 @@ invoke the `menuconfig` system and set pin configuration, etc in the `Omni` menu
 
 Matter Console
 --------------
-When the `monitor` command commands online, you actually have a serial command console to the device. Some useful
+When the `monitor` command comes online, you actually have a serial command console to the device. Some useful
 commands:
 
 	matter config
@@ -92,9 +92,54 @@ commands:
 
 > Note that until you've completed Matter certification, you will need to use the TESTING DEVICE onboarding codes.
 
+Features
+--------
+A set of Matter endpoints has implementations under `common/features` and can be easily enabled or imported for any
+application. Some of these endpoints are similar, but behave differently when connected to a control plane.
+
+### Button (Generic Switch)
+Ideal for using a physical momentary switch that will send events when pressed, but cannot be triggered from the
+control plane. Think of it as a read-only endpoint in controllers.
+
+A Matter "Generic Switch" has two modes: momentary and latching. 
+
+The momentary is the most typical use: you push a button, it sends an event. You can additionally support double-clicks
+and long-presses. 
+
+The latching type is akin to a flip switch - you can turn it on or off, but is controlled only by the physical device, 
+never by the control plane. This behaves oddly in _Home Assistant_, as for the "Generic Switch" endpoint it is only 
+listening for events. The event type is "latched", you will need additional conditions to also inspect the 
+`NewPosition` property to determine which way it latched.
+
+### On/Off
+This is a simple switch but unlike the button, it's designed to be controllable via the control plane. This allows
+for both the controller and the device to toggle the endpoint's binary state.
+
+For this reason, it's important NOT to use a physical flip switch on an On/Off endpoint, for the controller might 
+toggle the endpoint itself and you won't be able to toggle the physical switch electronically. 
+
+A push-button is appropriate, each push can toggle the state of the On/Off, or it can be toggled by the controller.
+
+### Sensor
+The sensor is a binary sensor, read-only to the control plane and intended to describe the state of a physical sensor.
+The only implementation of this is an "occupancy" sensor, which is really the only binary type of sensor in the Matter
+cluster specification.
+
+An occupancy sensor can have sub-types, such as PIR, ultrasonic, radar, visual, RF, etc but as the controller doesn't
+really care, this implementation just leaves it generic.
+
+### Reset
+The reset feature is important, it allows you to "factory reset" the device but suppressing a button for a configurable
+period of time. This allows you to recommission the device.
+
+When activated, the device will wipe the NVS partition and reboot. When it comes back up (only takes a second), it
+will be ready for commissioning again.
+
+This is the only way to recommission a device without reflashing it.
+
 Troubleshooting
 ---------------
-If a build failed, it will refuse to a do a fullclean. Fix this by deleting the build directory:
+If a build failed, it will refuse to do a `fullclean`. Fix this by deleting the build directory:
 
     rm -rf build/
 

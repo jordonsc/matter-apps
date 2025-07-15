@@ -4,6 +4,10 @@
 #include "app_sensor.h"
 #endif
 
+#if CONFIG_APP_ONOFF_ENABLED
+#include "app_onoff.h"
+#endif
+
 static const char *TAG = "app_matter";
 
 using namespace esp_matter;
@@ -16,6 +20,10 @@ void app_event_cb(const ChipDeviceEvent *event, intptr_t arg)
 #if CONFIG_APP_SENSOR_ENABLED
         // Sync sensor states to Matter attributes now that WiFi is connected
         sync_sensor_states();
+#endif
+#if CONFIG_APP_ONOFF_ENABLED
+        // Sync onoff device states to Matter attributes now that WiFi is connected
+        sync_onoff_states();
 #endif
         break;
 
@@ -77,5 +85,13 @@ esp_err_t app_attribute_update_cb(
     void *priv_data
 )
 {
+#if CONFIG_APP_ONOFF_ENABLED
+    // Handle OnOff device attribute updates
+    esp_err_t err = onoff_attribute_update_cb(endpoint_id, cluster_id, attribute_id, val);
+    if (err != ESP_OK) {
+        return err;
+    }
+#endif
+
     return ESP_OK;
 }

@@ -28,10 +28,16 @@
 #include <app_button.h>
 #endif
 
+#if CONFIG_APP_ONOFF_ENABLED
+// OnOff device handling
+#include <app_onoff.h>
+#endif
+
 #if CONFIG_APP_SENSOR_ENABLED
 // Sensor handling
 #include <app_sensor.h>
 #endif
+
 
 static const char *TAG = "app_main";
 
@@ -63,6 +69,11 @@ extern "C" void app_main()
 #if CONFIG_APP_BUTTON_ENABLED
     // Create button endpoints
     create_application_buttons(node);
+#endif
+
+#if CONFIG_APP_ONOFF_ENABLED
+    // Create onoff device endpoints
+    create_application_onoff_devices(node);
 #endif
 
 #if CONFIG_APP_SENSOR_ENABLED
