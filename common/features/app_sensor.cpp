@@ -16,7 +16,7 @@ using namespace esp_matter::endpoint;
 static const char *TAG = "app_sensor";
 
 static uint16_t configured_sensors = 0;
-static struct gpio_sensor sensor_storage[5];
+static struct gpio_sensor sensor_storage[CONFIG_SENSOR_COUNT];
 
 /**
  * Update the output pin state if configured
@@ -122,9 +122,9 @@ void create_sensor(node_t* node, gpio_sensor* sensor)
         );
         
         // Set feature flags for the occupancy sensor
-        config.occupancy_sensing.feature_flags = chip::to_underlying(
-            OccupancySensing::Feature::kOther
-        );
+        // config.occupancy_sensing.feature_flags = chip::to_underlying(
+        //     OccupancySensing::Feature::kOther
+        // );
 
         // Create the occupancy sensor endpoint
         sensor_endpoint = occupancy_sensor::create(node, &config, ENDPOINT_FLAG_NONE, sensor);
@@ -222,6 +222,11 @@ void create_application_sensors(node_t* node)
     // G12     - Generic sensor (BooleanState cluster) on pin 12
     // GI12    - Generic sensor on pin 12 with logic inverted
     // OI34:9  - Occupancy sensor on pin 34 with logic inverted and output on pin 9
+
+    if (CONFIG_SENSOR_COUNT == 0) {
+        ESP_LOGI(TAG, "No sensors configured (CONFIG_SENSOR_COUNT=0). Skipping sensor creation.");
+        return;
+    }
 
     const char* gpio_list_str = CONFIG_SENSOR_GPIO_LIST;
     if (gpio_list_str && gpio_list_str[0] != '\0') {
@@ -321,6 +326,10 @@ void destroy_application_sensors(void)
 {
     ESP_LOGI(TAG, "Destroying %d application sensors", configured_sensors);
     
+    if (configured_sensors == 0) {
+        return;
+    }
+
     for (int i = 0; i < configured_sensors; i++) {
         destroy_sensor(&sensor_storage[i]);
     }
@@ -337,7 +346,7 @@ void destroy_application_sensors(void)
 void sync_sensor_states(void)
 {
     ESP_LOGI(TAG, "Syncing %d sensor states to Matter attributes", configured_sensors);
-    
+
     for (int i = 0; i < configured_sensors; ++i) {
         gpio_sensor* sensor = &sensor_storage[i];
         if (sensor->button_handle != nullptr) {

@@ -31,7 +31,7 @@ The `init` file in this project root will export both SDKs, once you've done the
 ### System Packages
 For Linux (Ubuntu) users:
 
-	sudo apt install -y cmake gn ninja-build python3.13-venv pkg-config libssl-dev libglib2.0-dev
+	sudo apt install -y cmake generate-ninja ninja-build python3-venv pkg-config libssl-dev libglib2.0-dev
 	sudo usermod -aG dialout `whoami`
 	newgrp dialout
 
@@ -48,8 +48,9 @@ For Linux (Ubuntu) users:
 ### ESP Matter
 	
 	git clone --recursive https://github.com/espressif/esp-matter.git
+	cd esp-matter
 	git checkout release/v1.4
-	cd ./connectedhomeip/connectedhomeip
+	cd connectedhomeip/connectedhomeip
 	./scripts/checkout_submodules.py --platform esp32 linux --shallow
 	cd ../..
 	./install.sh

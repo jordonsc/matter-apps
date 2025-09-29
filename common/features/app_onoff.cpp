@@ -173,6 +173,11 @@ void create_application_onoff_devices(node_t* node)
     // O22    - Outlet on pin 22
     // L34:12 - Light on pin 34 with output on pin 12
 
+    if (CONFIG_ONOFF_COUNT == 0) {
+        ESP_LOGI(TAG, "No on/off devices configured (CONFIG_ONOFF_COUNT=0). Skipping device creation.");
+        return;
+    }
+
     const char* gpio_list_str = CONFIG_ONOFF_GPIO_LIST;
     if (gpio_list_str && gpio_list_str[0] != '\0') {
         char buf[128];
@@ -265,6 +270,10 @@ void destroy_application_onoff_devices(void)
 {
     ESP_LOGI(TAG, "Destroying %d application on/off devices", configured_onoff_devices);
     
+    if (configured_onoff_devices == 0) {
+        return;
+    }
+
     for (int i = 0; i < configured_onoff_devices; i++) {
         destroy_onoff_device(&onoff_storage[i]);
     }
@@ -399,6 +408,10 @@ esp_err_t onoff_attribute_update_cb(
     
     // Only handle OnOff attribute updates
     if (attribute_id != OnOff::Attributes::OnOff::Id) {
+        return ESP_OK;
+    }
+
+    if (configured_onoff_devices == 0) {
         return ESP_OK;
     }
     

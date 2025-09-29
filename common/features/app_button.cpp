@@ -182,10 +182,13 @@ void create_button(node_t* node, gpio_button* button)
 {
     ESP_LOGI(TAG, "Creating button on GPIO %d", button->gpio_pin);
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wtype-limits"
     if (configured_buttons >= CONFIG_BUTTON_COUNT) {
         ESP_LOGE(TAG, "Button storage full. Cannot create more buttons. Max: %d", CONFIG_BUTTON_COUNT);
         return;
     }
+#pragma GCC diagnostic pop
 
     // Initialize driver
     button_init(button);
@@ -196,10 +199,10 @@ void create_button(node_t* node, gpio_button* button)
 
     // Create switch config
     generic_switch::config_t switch_config;
-    switch_config.switch_cluster.feature_flags = 
-         button->mechanism == button_mechanism::LATCHING
-        ? cluster::switch_cluster::feature::latching_switch::get_id()
-        : cluster::switch_cluster::feature::momentary_switch::get_id();
+    // switch_config.switch_cluster.feature_flags = 
+    //      button->mechanism == button_mechanism::LATCHING
+    //     ? cluster::switch_cluster::feature::latching_switch::get_id()
+    //     : cluster::switch_cluster::feature::momentary_switch::get_id();
 
     // Create switch endpoint with the switch cluster configuration.
     endpoint_t* endpoint = generic_switch::create(node, &switch_config, ENDPOINT_FLAG_NONE, button->button_handle);
@@ -281,6 +284,11 @@ void create_application_buttons(node_t* node)
     // ML9   - momentary-long-press on pin 9
     // MX9   - momentary-double-click-long-press on pin 9
     // M9:12 - momentary on pin 9 with output on pin 12
+
+    if (CONFIG_BUTTON_COUNT == 0) {
+        ESP_LOGI(TAG, "No buttons configured (CONFIG_BUTTON_COUNT=0). Skipping button creation.");
+        return;
+    }
 
     const char* gpio_list_str = CONFIG_BUTTON_GPIO_LIST;
     if (gpio_list_str && gpio_list_str[0] != '\0') {
