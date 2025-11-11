@@ -1,9 +1,5 @@
 #include "app_onoff.h"
 
-#ifndef CONFIG_ONOFF_COUNT
-#define CONFIG_ONOFF_COUNT 0
-#endif
-
 #ifndef CONFIG_ONOFF_GPIO_LIST
 #define CONFIG_ONOFF_GPIO_LIST ""
 #endif
@@ -16,7 +12,66 @@ using namespace esp_matter::endpoint;
 static const char *TAG = "app_onoff";
 
 static uint16_t configured_onoff_devices = 0;
-static struct gpio_onoff onoff_storage[CONFIG_ONOFF_COUNT];
+static uint16_t max_onoff_devices = 0;
+static struct gpio_onoff* onoff_storage = nullptr;
+
+/**
+ * Count the number of valid onoff device configurations in the GPIO list
+ */
+static uint16_t count_onoff_devices_in_list(const char* gpio_list_str)
+{
+    if (!gpio_list_str || gpio_list_str[0] == '\0') {
+        return 0;
+    }
+
+    char buf[128];
+    strncpy(buf, gpio_list_str, sizeof(buf) - 1);
+    buf[sizeof(buf) - 1] = '\0';
+
+    uint16_t count = 0;
+    char* token = strtok(buf, " ");
+
+    while (token != nullptr) {
+        size_t len = strlen(token);
+        if (len < 2) {
+            token = strtok(nullptr, " ");
+            continue;
+        }
+
+        // Parse device type
+        int idx = 0;
+        if (token[idx] == 'L' || token[idx] == 'O') {
+            idx++;
+        } else {
+            token = strtok(nullptr, " ");
+            continue;
+        }
+
+        // Parse pin number and optional output pin
+        char* pin_spec = token + idx;
+        char* colon_pos = strchr(pin_spec, ':');
+        int pin = -1;
+        int output_pin = -1;
+
+        if (colon_pos != nullptr) {
+            *colon_pos = '\0';
+            pin = atoi(pin_spec);
+            output_pin = atoi(colon_pos + 1);
+        } else {
+            pin = atoi(pin_spec);
+        }
+
+        // Validate pin ranges
+        if (pin >= 0 && pin < GPIO_NUM_MAX &&
+            (output_pin == -1 || (output_pin >= 0 && output_pin < GPIO_NUM_MAX))) {
+            count++;
+        }
+
+        token = strtok(nullptr, " ");
+    }
+
+    return count;
+}
 
 /**
  * Update the output pin state if configured
@@ -165,7 +220,7 @@ void destroy_onoff_device(gpio_onoff* onoff)
  * Using the on/off device list configured via Kconfig, create the devices and add them to the Matter node.
  */
 void create_application_onoff_devices(node_t* node)
-{    
+{
     // Parse CONFIG_ONOFF_GPIO_LIST for a list of GPIO pins to create on/off devices.
     // This is a space-separated list of GPIO pin definitions.
     // Example: CONFIG_ONOFF_GPIO_LIST="L34:12 O22 S16"
@@ -173,13 +228,30 @@ void create_application_onoff_devices(node_t* node)
     // O22    - Outlet on pin 22
     // L34:12 - Light on pin 34 with output on pin 12
 
-    if (CONFIG_ONOFF_COUNT == 0) {
-        ESP_LOGI(TAG, "No on/off devices configured (CONFIG_ONOFF_COUNT=0). Skipping device creation.");
+    const char* gpio_list_str = CONFIG_ONOFF_GPIO_LIST;
+    if (!gpio_list_str || gpio_list_str[0] == '\0') {
+        ESP_LOGI(TAG, "No on/off devices configured. Please set CONFIG_ONOFF_GPIO_LIST.");
         return;
     }
 
-    const char* gpio_list_str = CONFIG_ONOFF_GPIO_LIST;
-    if (gpio_list_str && gpio_list_str[0] != '\0') {
+    // Count valid devices in the list
+    max_onoff_devices = count_onoff_devices_in_list(gpio_list_str);
+    if (max_onoff_devices == 0) {
+        ESP_LOGI(TAG, "No valid on/off device configurations found. Skipping device creation.");
+        return;
+    }
+
+    // Allocate memory for the devices
+    onoff_storage = (gpio_onoff*)calloc(max_onoff_devices, sizeof(gpio_onoff));
+    if (!onoff_storage) {
+        ESP_LOGE(TAG, "Failed to allocate memory for %d on/off devices", max_onoff_devices);
+        return;
+    }
+
+    ESP_LOGI(TAG, "Allocated storage for %d on/off devices", max_onoff_devices);
+
+    // Parse and create devices
+    {
         char buf[128];
         strncpy(buf, gpio_list_str, sizeof(buf) - 1);
         buf[sizeof(buf) - 1] = '\0';
@@ -242,24 +314,23 @@ void create_application_onoff_devices(node_t* node)
                     output_pin != -1 ? std::to_string(output_pin).c_str() : "none"
                 );
 
-                if (configured_onoff_devices >= CONFIG_ONOFF_COUNT) {
-                    ESP_LOGE(TAG, "OnOff device storage full. Cannot create more devices. Max: %d", CONFIG_ONOFF_COUNT);
+                if (configured_onoff_devices >= max_onoff_devices) {
+                    ESP_LOGE(TAG, "OnOff device storage full. Cannot create more devices. Max: %d", max_onoff_devices);
                     return;
                 }
 
-                // Create the device with the parsed configuration                
-                gpio_onoff* onoff = &onoff_storage[configured_onoff_devices++];
+                // Create the device with the parsed configuration
+                gpio_onoff* onoff = &onoff_storage[configured_onoff_devices];
                 onoff->gpio_pin = (gpio_num_t)pin;
                 onoff->output_pin = output_pin != -1 ? (gpio_num_t)output_pin : GPIO_NUM_NC;
                 onoff->state = false;
                 onoff->type = type;
 
                 create_onoff_device(node, onoff);
+                configured_onoff_devices++;
             }
             token = strtok(nullptr, " ");
         }
-    } else {
-        ESP_LOGW(TAG, "No GPIO pins configured for on/off devices. Please set CONFIG_ONOFF_GPIO_LIST.");
     }
 }
 
@@ -269,16 +340,19 @@ void create_application_onoff_devices(node_t* node)
 void destroy_application_onoff_devices(void)
 {
     ESP_LOGI(TAG, "Destroying %d application on/off devices", configured_onoff_devices);
-    
-    if (configured_onoff_devices == 0) {
-        return;
+
+    if (onoff_storage) {
+        for (int i = 0; i < configured_onoff_devices; i++) {
+            destroy_onoff_device(&onoff_storage[i]);
+        }
+
+        // Free the dynamically allocated memory
+        free(onoff_storage);
+        onoff_storage = nullptr;
     }
 
-    for (int i = 0; i < configured_onoff_devices; i++) {
-        destroy_onoff_device(&onoff_storage[i]);
-    }
-    
     configured_onoff_devices = 0;
+    max_onoff_devices = 0;
 }
 
 /**
@@ -290,9 +364,10 @@ void destroy_application_onoff_devices(void)
 void sync_onoff_states(void)
 {
     ESP_LOGI(TAG, "Syncing %d on/off device states to Matter attributes", configured_onoff_devices);
-    
-    for (int i = 0; i < configured_onoff_devices; ++i) {
-        gpio_onoff* onoff = &onoff_storage[i];
+
+    if (onoff_storage) {
+        for (int i = 0; i < configured_onoff_devices; ++i) {
+            gpio_onoff* onoff = &onoff_storage[i];
         if (onoff->button_handle != nullptr) {
             esp_matter_attr_val_t val = esp_matter_bool(onoff->state);
             esp_err_t ret = attribute::update(
@@ -309,8 +384,9 @@ void sync_onoff_states(void)
                 ESP_LOGW(TAG, "Failed to sync on/off endpoint %d: %s", 
                     onoff->endpoint, esp_err_to_name(ret));
             }
-        } else {
-            ESP_LOGW(TAG, "OnOff device %d has no button handle, skipping sync", i);
+            } else {
+                ESP_LOGW(TAG, "OnOff device %d has no button handle, skipping sync", i);
+            }
         }
     }
 }
@@ -326,10 +402,12 @@ esp_err_t set_onoff_state(uint16_t endpoint_id, bool state)
 {
     // Find the device by endpoint ID
     gpio_onoff* onoff = nullptr;
-    for (int i = 0; i < configured_onoff_devices; i++) {
-        if (onoff_storage[i].endpoint == endpoint_id) {
-            onoff = &onoff_storage[i];
-            break;
+    if (onoff_storage) {
+        for (int i = 0; i < configured_onoff_devices; i++) {
+            if (onoff_storage[i].endpoint == endpoint_id) {
+                onoff = &onoff_storage[i];
+                break;
+            }
         }
     }
     
@@ -368,10 +446,12 @@ esp_err_t get_onoff_state(uint16_t endpoint_id, bool* state)
     
     // Find the device by endpoint ID
     gpio_onoff* onoff = nullptr;
-    for (int i = 0; i < configured_onoff_devices; i++) {
-        if (onoff_storage[i].endpoint == endpoint_id) {
-            onoff = &onoff_storage[i];
-            break;
+    if (onoff_storage) {
+        for (int i = 0; i < configured_onoff_devices; i++) {
+            if (onoff_storage[i].endpoint == endpoint_id) {
+                onoff = &onoff_storage[i];
+                break;
+            }
         }
     }
     
@@ -417,10 +497,12 @@ esp_err_t onoff_attribute_update_cb(
     
     // Find the device by endpoint ID
     gpio_onoff* onoff = nullptr;
-    for (int i = 0; i < configured_onoff_devices; i++) {
-        if (onoff_storage[i].endpoint == endpoint_id) {
-            onoff = &onoff_storage[i];
-            break;
+    if (onoff_storage) {
+        for (int i = 0; i < configured_onoff_devices; i++) {
+            if (onoff_storage[i].endpoint == endpoint_id) {
+                onoff = &onoff_storage[i];
+                break;
+            }
         }
     }
     

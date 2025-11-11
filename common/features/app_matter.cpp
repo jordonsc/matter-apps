@@ -8,9 +8,14 @@
 #include "app_onoff.h"
 #endif
 
+#if CONFIG_APP_HX711_ENABLED
+#include "app_hx711.h"
+#endif
+
 static const char *TAG = "app_matter";
 
 using namespace esp_matter;
+using namespace chip::app::Clusters;
 
 void app_event_cb(const ChipDeviceEvent *event, intptr_t arg)
 {
@@ -78,10 +83,10 @@ esp_err_t app_identification_cb(
 // and return an appropriate error code. If the attribute is not of your interest, please do not return an error code 
 // and strictly return ESP_OK.
 esp_err_t app_attribute_update_cb(
-    attribute::callback_type_t type, 
-    uint16_t endpoint_id, 
+    attribute::callback_type_t type,
+    uint16_t endpoint_id,
     uint32_t cluster_id,
-    uint32_t attribute_id, esp_matter_attr_val_t *val, 
+    uint32_t attribute_id, esp_matter_attr_val_t *val,
     void *priv_data
 )
 {
@@ -90,6 +95,14 @@ esp_err_t app_attribute_update_cb(
     esp_err_t err = onoff_attribute_update_cb(endpoint_id, cluster_id, attribute_id, val);
     if (err != ESP_OK) {
         return err;
+    }
+#endif
+
+#if CONFIG_APP_HX711_ENABLED
+    // Handle HX711 attribute updates (tare on/off light and scale configuration)
+    esp_err_t hx711_err = hx711_matter_attribute_update_cb(endpoint_id, cluster_id, attribute_id, val);
+    if (hx711_err != ESP_OK) {
+        return hx711_err;
     }
 #endif
 

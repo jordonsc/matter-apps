@@ -1,9 +1,5 @@
 #include "app_sensor.h"
 
-#ifndef CONFIG_SENSOR_COUNT
-#define CONFIG_SENSOR_COUNT 0
-#endif
-
 #ifndef CONFIG_SENSOR_GPIO_LIST
 #define CONFIG_SENSOR_GPIO_LIST ""
 #endif
@@ -16,7 +12,71 @@ using namespace esp_matter::endpoint;
 static const char *TAG = "app_sensor";
 
 static uint16_t configured_sensors = 0;
-static struct gpio_sensor sensor_storage[CONFIG_SENSOR_COUNT];
+static uint16_t max_sensors = 0;
+static struct gpio_sensor* sensor_storage = nullptr;
+
+/**
+ * Count the number of valid sensor configurations in the GPIO list
+ */
+static uint16_t count_sensors_in_list(const char* gpio_list_str)
+{
+    if (!gpio_list_str || gpio_list_str[0] == '\0') {
+        return 0;
+    }
+
+    char buf[128];
+    strncpy(buf, gpio_list_str, sizeof(buf) - 1);
+    buf[sizeof(buf) - 1] = '\0';
+
+    uint16_t count = 0;
+    char* token = strtok(buf, " ");
+
+    while (token != nullptr) {
+        size_t len = strlen(token);
+        if (len < 2) {
+            token = strtok(nullptr, " ");
+            continue;
+        }
+
+        // Parse sensor type and inverted flag
+        int idx = 0;
+        if (token[idx] == 'O' || token[idx] == 'G') {
+            idx++;
+        } else {
+            token = strtok(nullptr, " ");
+            continue;
+        }
+
+        // Skip inverted flag (I)
+        if (idx < len && token[idx] == 'I') {
+            idx++;
+        }
+
+        // Parse pin number and optional output pin
+        char* pin_spec = token + idx;
+        char* colon_pos = strchr(pin_spec, ':');
+        int pin = -1;
+        int output_pin = -1;
+
+        if (colon_pos != nullptr) {
+            *colon_pos = '\0';
+            pin = atoi(pin_spec);
+            output_pin = atoi(colon_pos + 1);
+        } else {
+            pin = atoi(pin_spec);
+        }
+
+        // Validate pin ranges
+        if (pin >= 0 && pin < GPIO_NUM_MAX &&
+            (output_pin == -1 || (output_pin >= 0 && output_pin < GPIO_NUM_MAX))) {
+            count++;
+        }
+
+        token = strtok(nullptr, " ");
+    }
+
+    return count;
+}
 
 /**
  * Update the output pin state if configured
@@ -213,7 +273,7 @@ void destroy_sensor(gpio_sensor* sensor)
  * Using the sensor list configured via Kconfig, create the sensors and add them to the Matter node.
  */
 void create_application_sensors(node_t* node)
-{    
+{
     // Parse CONFIG_SENSOR_GPIO_LIST for a list of GPIO pins to create sensors.
     // This is a space-separated list of GPIO pin definitions.
     // Example: CONFIG_SENSOR_GPIO_LIST="OI34:9 G12"
@@ -223,13 +283,30 @@ void create_application_sensors(node_t* node)
     // GI12    - Generic sensor on pin 12 with logic inverted
     // OI34:9  - Occupancy sensor on pin 34 with logic inverted and output on pin 9
 
-    if (CONFIG_SENSOR_COUNT == 0) {
-        ESP_LOGI(TAG, "No sensors configured (CONFIG_SENSOR_COUNT=0). Skipping sensor creation.");
+    const char* gpio_list_str = CONFIG_SENSOR_GPIO_LIST;
+    if (!gpio_list_str || gpio_list_str[0] == '\0') {
+        ESP_LOGI(TAG, "No sensors configured. Please set CONFIG_SENSOR_GPIO_LIST.");
         return;
     }
 
-    const char* gpio_list_str = CONFIG_SENSOR_GPIO_LIST;
-    if (gpio_list_str && gpio_list_str[0] != '\0') {
+    // Count valid sensors in the list
+    max_sensors = count_sensors_in_list(gpio_list_str);
+    if (max_sensors == 0) {
+        ESP_LOGI(TAG, "No valid sensor configurations found. Skipping sensor creation.");
+        return;
+    }
+
+    // Allocate memory for the sensors
+    sensor_storage = (gpio_sensor*)calloc(max_sensors, sizeof(gpio_sensor));
+    if (!sensor_storage) {
+        ESP_LOGE(TAG, "Failed to allocate memory for %d sensors", max_sensors);
+        return;
+    }
+
+    ESP_LOGI(TAG, "Allocated storage for %d sensors", max_sensors);
+
+    // Parse and create sensors
+    {
         char buf[128];
         strncpy(buf, gpio_list_str, sizeof(buf) - 1);
         buf[sizeof(buf) - 1] = '\0';
@@ -297,13 +374,13 @@ void create_application_sensors(node_t* node)
                     output_pin != -1 ? std::to_string(output_pin).c_str() : "none"
                 );
 
-                if (configured_sensors >= CONFIG_SENSOR_COUNT) {
-                    ESP_LOGE(TAG, "Sensor storage full. Cannot create more sensors. Max: %d", CONFIG_SENSOR_COUNT);
+                if (configured_sensors >= max_sensors) {
+                    ESP_LOGE(TAG, "Sensor storage full. Cannot create more sensors. Max: %d", max_sensors);
                     return;
                 }
 
-                // Create the sensor with the parsed features                
-                gpio_sensor* sensor = &sensor_storage[configured_sensors++];
+                // Create the sensor with the parsed features
+                gpio_sensor* sensor = &sensor_storage[configured_sensors];
                 sensor->gpio_pin = (gpio_num_t)pin;
                 sensor->output_pin = output_pin != -1 ? (gpio_num_t)output_pin : GPIO_NUM_NC;
                 sensor->inverted = inverted;
@@ -311,11 +388,10 @@ void create_application_sensors(node_t* node)
                 sensor->type = type;
 
                 create_sensor(node, sensor);
+                configured_sensors++;
             }
             token = strtok(nullptr, " ");
         }
-    } else {
-        ESP_LOGW(TAG, "No GPIO pins configured for buttons. Please set CONFIG_BUTTON_GPIO_LIST.");
     }
 }
 
@@ -325,16 +401,19 @@ void create_application_sensors(node_t* node)
 void destroy_application_sensors(void)
 {
     ESP_LOGI(TAG, "Destroying %d application sensors", configured_sensors);
-    
-    if (configured_sensors == 0) {
-        return;
+
+    if (sensor_storage) {
+        for (int i = 0; i < configured_sensors; i++) {
+            destroy_sensor(&sensor_storage[i]);
+        }
+
+        // Free the dynamically allocated memory
+        free(sensor_storage);
+        sensor_storage = nullptr;
     }
 
-    for (int i = 0; i < configured_sensors; i++) {
-        destroy_sensor(&sensor_storage[i]);
-    }
-    
     configured_sensors = 0;
+    max_sensors = 0;
 }
 
 /**
@@ -347,8 +426,9 @@ void sync_sensor_states(void)
 {
     ESP_LOGI(TAG, "Syncing %d sensor states to Matter attributes", configured_sensors);
 
-    for (int i = 0; i < configured_sensors; ++i) {
-        gpio_sensor* sensor = &sensor_storage[i];
+    if (sensor_storage) {
+        for (int i = 0; i < configured_sensors; ++i) {
+            gpio_sensor* sensor = &sensor_storage[i];
         if (sensor->button_handle != nullptr) {
             esp_matter_attr_val_t val = esp_matter_bool(sensor->state);
             esp_err_t ret;
@@ -380,8 +460,9 @@ void sync_sensor_states(void)
                 ESP_LOGW(TAG, "Failed to sync sensor endpoint %d: %s", 
                     sensor->endpoint, esp_err_to_name(ret));
             }
-        } else {
-            ESP_LOGW(TAG, "Sensor %d has no button handle, skipping sync", i);
+            } else {
+                ESP_LOGW(TAG, "Sensor %d has no button handle, skipping sync", i);
+            }
         }
     }
 }

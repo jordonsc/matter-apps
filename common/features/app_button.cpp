@@ -1,9 +1,5 @@
 #include "app_button.h"
 
-#ifndef CONFIG_BUTTON_COUNT
-#define CONFIG_BUTTON_COUNT 0
-#endif
-
 #ifndef CONFIG_BUTTON_GPIO_LIST
 #define CONFIG_BUTTON_GPIO_LIST ""
 #endif
@@ -16,7 +12,71 @@ using namespace esp_matter::endpoint;
 static const char* TAG = "app_button";
 
 static uint16_t configured_buttons = 0;
-static struct gpio_button button_storage[CONFIG_BUTTON_COUNT];
+static uint16_t max_buttons = 0;
+static struct gpio_button* button_storage = nullptr;
+
+/**
+ * Count the number of valid button configurations in the GPIO list
+ */
+static uint16_t count_buttons_in_list(const char* gpio_list_str)
+{
+    if (!gpio_list_str || gpio_list_str[0] == '\0') {
+        return 0;
+    }
+
+    char buf[128];
+    strncpy(buf, gpio_list_str, sizeof(buf) - 1);
+    buf[sizeof(buf) - 1] = '\0';
+
+    uint16_t count = 0;
+    char* token = strtok(buf, " ");
+
+    while (token != nullptr) {
+        size_t len = strlen(token);
+        if (len < 2) {
+            token = strtok(nullptr, " ");
+            continue;
+        }
+
+        // Parse mechanism and features
+        int idx = 0;
+        if (token[idx] == 'L' || token[idx] == 'M') {
+            idx++;
+        } else {
+            token = strtok(nullptr, " ");
+            continue;
+        }
+
+        // Skip feature flags (D, L, X)
+        while (idx < len && (token[idx] == 'D' || token[idx] == 'L' || token[idx] == 'X')) {
+            idx++;
+        }
+
+        // Parse pin number and optional output pin
+        char* pin_spec = token + idx;
+        char* colon_pos = strchr(pin_spec, ':');
+        int pin = -1;
+        int output_pin = -1;
+
+        if (colon_pos != nullptr) {
+            *colon_pos = '\0';
+            pin = atoi(pin_spec);
+            output_pin = atoi(colon_pos + 1);
+        } else {
+            pin = atoi(pin_spec);
+        }
+
+        // Validate pin ranges
+        if (pin >= 0 && pin < GPIO_NUM_MAX &&
+            (output_pin == -1 || (output_pin >= 0 && output_pin < GPIO_NUM_MAX))) {
+            count++;
+        }
+
+        token = strtok(nullptr, " ");
+    }
+
+    return count;
+}
 
 /**
  * Update the output pin state based on button state
@@ -182,13 +242,10 @@ void create_button(node_t* node, gpio_button* button)
 {
     ESP_LOGI(TAG, "Creating button on GPIO %d", button->gpio_pin);
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wtype-limits"
-    if (configured_buttons >= CONFIG_BUTTON_COUNT) {
-        ESP_LOGE(TAG, "Button storage full. Cannot create more buttons. Max: %d", CONFIG_BUTTON_COUNT);
+    if (configured_buttons >= max_buttons) {
+        ESP_LOGE(TAG, "Button storage full. Cannot create more buttons. Max: %d", max_buttons);
         return;
     }
-#pragma GCC diagnostic pop
 
     // Initialize driver
     button_init(button);
@@ -285,13 +342,30 @@ void create_application_buttons(node_t* node)
     // MX9   - momentary-double-click-long-press on pin 9
     // M9:12 - momentary on pin 9 with output on pin 12
 
-    if (CONFIG_BUTTON_COUNT == 0) {
-        ESP_LOGI(TAG, "No buttons configured (CONFIG_BUTTON_COUNT=0). Skipping button creation.");
+    const char* gpio_list_str = CONFIG_BUTTON_GPIO_LIST;
+    if (!gpio_list_str || gpio_list_str[0] == '\0') {
+        ESP_LOGI(TAG, "No buttons configured. Please set CONFIG_BUTTON_GPIO_LIST.");
         return;
     }
 
-    const char* gpio_list_str = CONFIG_BUTTON_GPIO_LIST;
-    if (gpio_list_str && gpio_list_str[0] != '\0') {
+    // Count valid buttons in the list
+    max_buttons = count_buttons_in_list(gpio_list_str);
+    if (max_buttons == 0) {
+        ESP_LOGI(TAG, "No valid button configurations found. Skipping button creation.");
+        return;
+    }
+
+    // Allocate memory for the buttons
+    button_storage = (gpio_button*)calloc(max_buttons, sizeof(gpio_button));
+    if (!button_storage) {
+        ESP_LOGE(TAG, "Failed to allocate memory for %d buttons", max_buttons);
+        return;
+    }
+
+    ESP_LOGI(TAG, "Allocated storage for %d buttons", max_buttons);
+
+    // Parse and create buttons
+    {
         char buf[128];
         strncpy(buf, gpio_list_str, sizeof(buf) - 1);
         buf[sizeof(buf) - 1] = '\0';
@@ -361,8 +435,8 @@ void create_application_buttons(node_t* node)
                          enable_double_click, enable_long_press, pin,
                          output_pin != -1 ? std::to_string(output_pin).c_str() : "none");
 
-                if (configured_buttons >= CONFIG_BUTTON_COUNT) {
-                    ESP_LOGE(TAG, "Button storage full. Cannot create more buttons. Max: %d", CONFIG_BUTTON_COUNT);
+                if (configured_buttons >= max_buttons) {
+                    ESP_LOGE(TAG, "Button storage full. Cannot create more buttons. Max: %d", max_buttons);
                     return;
                 }
 
@@ -375,11 +449,10 @@ void create_application_buttons(node_t* node)
                 button->feature_long_press = enable_long_press;
 
                 create_button(node, button);
+                configured_buttons++;
             }
             token = strtok(nullptr, " ");
         }
-    } else {
-        ESP_LOGW(TAG, "No GPIO pins configured for buttons. Please set CONFIG_BUTTON_GPIO_LIST.");
     }
 }
 
@@ -389,10 +462,17 @@ void create_application_buttons(node_t* node)
 void destroy_application_buttons(void)
 {
     ESP_LOGI(TAG, "Destroying %d application buttons", configured_buttons);
-    
-    for (int i = 0; i < configured_buttons; i++) {
-        destroy_button(&button_storage[i]);
+
+    if (button_storage) {
+        for (int i = 0; i < configured_buttons; i++) {
+            destroy_button(&button_storage[i]);
+        }
+
+        // Free the dynamically allocated memory
+        free(button_storage);
+        button_storage = nullptr;
     }
-    
+
     configured_buttons = 0;
+    max_buttons = 0;
 }

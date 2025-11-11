@@ -38,6 +38,11 @@
 #include <app_sensor.h>
 #endif
 
+#if CONFIG_APP_HX711_ENABLED
+// HX711 Load Cell handling
+#include <app_hx711.h>
+#endif
+
 
 static const char *TAG = "app_main";
 
@@ -79,6 +84,11 @@ extern "C" void app_main()
 #if CONFIG_APP_SENSOR_ENABLED
     // Create sensor endpoints
     create_application_sensors(node);
+#endif
+
+#if CONFIG_APP_HX711_ENABLED
+    // Create HX711 load cell sensor endpoints
+    create_application_hx711_sensors(node);
 #endif
 
 #if CHIP_DEVICE_CONFIG_ENABLE_THREAD

@@ -76,6 +76,27 @@ Building Apps
 	idf.py -p /dev/ttyACM0 flash monitor
 
 
+Using WSL
+---------
+If you want to build using WSL 2, you can bind the device (per-device level) to the WSL environment:
+
+Install the Windows USB IPD tool:
+	
+	# In Windows PowerShell (Admin):
+	winget install --interactive --exact dorssel.usbipd-win 
+
+Bind the device to WSL:
+
+	# In PowerShell (Admin) list devices and note the BUSID (e.g. 4-4):
+	usbipd list
+
+	# Share it (bind):
+	usbipd bind --busid 1-1
+
+	# Attach it to WSL (Windows will no longer use it while attached):
+	usbipd attach --wsl --busid 1-1
+
+
 Applications
 ------------
 ### Omni

@@ -44,13 +44,6 @@ menu "Omni"
 				MX9   - momentary-double-click-long-press on pin 9
 				M9:12 - momentary on pin 9 with output on pin 12
 
-		config BUTTON_COUNT
-			depends on APP_BUTTON_ENABLED
-			int "Numer of items in GPIO list"
-			default 1
-			range 1 50
-			help
-				This is the memory size for button storage. Set to the number of elements in the GPIO list.
 		
 		config BUTTON_LONG_PRESS_TIME_MS
 			depends on APP_BUTTON_ENABLED
@@ -79,13 +72,6 @@ menu "Omni"
 				O22    - Outlet on pin 22
 				L34:12 - Light on pin 34 with output on pin 12
 
-		config ONOFF_COUNT
-			depends on APP_ONOFF_ENABLED
-			int "Number of items in GPIO list"
-			default 1
-			range 1 50
-			help
-				This is the memory size for on/off device storage. Set to the number of elements in the GPIO list.
 		
 	endmenu
 
@@ -109,14 +95,37 @@ menu "Omni"
 				GI12    - Generic sensor on pin 12 with logic inverted
 				OI34:9  - Occupancy sensor on pin 34 with logic inverted and output on pin 9
 
-		config SENSOR_COUNT
-			depends on APP_SENSOR_ENABLED
-			int "Numer of items in GPIO list"
-			default 1
-			range 1 50
-			help
-				This is the memory size for sensor storage. Set to the number of elements in the GPIO list.
 		
+	endmenu
+
+	menu "HX711 Load Cell"
+		config APP_HX711_ENABLED
+			bool "HX711 Load Cell feature enabled"
+			default n
+			help
+				Enables HX711 load cell sensors that provide weight measurements via Matter.
+				Creates generic sensor endpoints with weight values.
+
+		config HX711_GPIO_LIST
+			depends on APP_HX711_ENABLED
+			string "HX711 GPIO list"
+			default "2:4"
+			help
+				A space-separated list of HX711 sensor specifications.
+				Format: "SCK:DOUT" or "SCK:DOUT:SCALE"
+				Examples:
+				2:4        - HX711 with SCK on pin 2, DOUT on pin 4
+				5:18:2048.0 - HX711 with SCK on pin 5, DOUT on pin 18, scale factor 2048.0
+
+
+		config HX711_READING_INTERVAL_MS
+			depends on APP_HX711_ENABLED
+			int "Reading interval in milliseconds"
+			default 1000
+			range 100 60000
+			help
+				How often to read the HX711 sensors and update Matter attributes.
+
 	endmenu
 
 endmenu
