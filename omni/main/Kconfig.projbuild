@@ -128,4 +128,44 @@ menu "Omni"
 
 	endmenu
 
+	menu "A01NYUB Ultrasonic Sensor"
+		config APP_A01NYUB_ENABLED
+			bool "A01NYUB Ultrasonic Sensor feature enabled"
+			default n
+			help
+				Enables DFRobot A01NYUB waterproof ultrasonic distance sensors.
+				Sensors communicate via UART and measure distances from 28cm to 750cm.
+
+		config A01NYUB_UART_LIST
+			depends on APP_A01NYUB_ENABLED
+			string "A01NYUB UART configuration list"
+			default "1:5:15"
+			help
+				A space-separated list of A01NYUB sensor UART configurations.
+				Format: "UART:TX:RX"
+				Examples:
+				1:16:17 - A01NYUB on UART1, TX pin 5, RX pin 15
+
+		config A01NYUB_BAUD_RATE
+			depends on APP_A01NYUB_ENABLED
+			int "UART baud rate"
+			default 9600
+			help
+				Baud rate for A01NYUB sensor communication.
+				Default is 9600 (standard for A01NYUB).
+
+		config A01NYUB_MODE
+			depends on APP_A01NYUB_ENABLED
+			int "Sensor mode"
+			default 1
+			range 0 1
+			help
+				Output mode for A01NYUB sensor:
+				0 = Processed mode (steadier readings, 250ms polling)
+				1 = Real-time mode (faster updates, 150ms polling)
+
+				Reading interval is automatically set based on sensor mode.
+
+	endmenu
+
 endmenu

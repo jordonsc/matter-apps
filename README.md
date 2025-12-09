@@ -66,7 +66,7 @@ Building Apps
     cd omni
 	
     # Configure new target (only do once, or if you delete the `build` directory)
-	idf.py set-target esp32s3		# replace with correct MCU
+	idf.py set-target esp32c6		# replace with correct MCU
 
 	# Configure Matter endpoints (see below):
 	idf.py menuconfig
@@ -75,6 +75,15 @@ Building Apps
 	idf.py build 
 	idf.py -p /dev/ttyACM0 flash monitor
 
+
+### Pro Tips
+The `init` script will provide some helpers, so you can shorthand the above:
+
+	idf set-target esp32c6
+	menu  # idf menuconfig
+	bfm   # build, flash, monitor
+
+Use `help` to list all helpers.
 
 Using WSL
 ---------
