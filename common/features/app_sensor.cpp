@@ -384,8 +384,15 @@ void create_application_sensors(node_t* node)
                 sensor->gpio_pin = (gpio_num_t)pin;
                 sensor->output_pin = output_pin != -1 ? (gpio_num_t)output_pin : GPIO_NUM_NC;
                 sensor->inverted = inverted;
-                sensor->state = false;
                 sensor->type = type;
+
+                // Read actual GPIO state before creating endpoint so the
+                // initial Matter attribute value is correct.
+                gpio_reset_pin(sensor->gpio_pin);
+                gpio_set_direction(sensor->gpio_pin, GPIO_MODE_INPUT);
+                gpio_set_pull_mode(sensor->gpio_pin, GPIO_PULLUP_ONLY);
+                bool gpio_active = (gpio_get_level(sensor->gpio_pin) == 0);  // active_level = 0
+                sensor->state = inverted ? !gpio_active : gpio_active;
 
                 create_sensor(node, sensor);
                 configured_sensors++;

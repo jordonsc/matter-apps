@@ -309,8 +309,6 @@ void create_button(node_t* node, gpio_button* button)
         // Latching switches (mutally exclusive with momentary)
         cluster::switch_cluster::feature::latching_switch::add(cluster);
     }
-
-    configured_buttons++;
 }
 
 /**
