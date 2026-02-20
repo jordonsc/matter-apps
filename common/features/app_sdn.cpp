@@ -433,16 +433,18 @@ static bool sdn_query_position(sdn_blind *blind)
         return false;
     }
 
-    // LE 24-bit pulse position from data bytes 0-2
-    uint32_t pulses = (uint32_t)resp.data[0] |
-                      ((uint32_t)resp.data[1] << 8) |
-                      ((uint32_t)resp.data[2] << 16);
+    // POST_MOTOR_POS data format:
+    //   data[0-1]: LE 16-bit pulse position
+    //   data[2]:   percentage (0-100)
+    uint16_t pulses = (uint16_t)resp.data[0] | ((uint16_t)resp.data[1] << 8);
+    uint8_t pct = resp.data[2];
 
-    if (pulses == 0xFFFFFF)
+    if (pulses == 0xFFFF || pct > 100)
     {
         if (!blind->fault)
         {
-            ESP_LOGE(TAG, "Motor fault: position unknown (endpoint %d)", blind->endpoint);
+            ESP_LOGE(TAG, "Motor fault: position unknown (pulses=0x%04X, pct=%d, endpoint %d)",
+                     pulses, pct, blind->endpoint);
             blind->fault = true;
             blind->movement = sdn_movement_state::IDLE;
         }
@@ -456,29 +458,13 @@ static bool sdn_query_position(sdn_blind *blind)
         blind->fault = false;
     }
 
-    uint8_t pct;
-    uint16_t range = blind->down_limit_pulses - blind->up_limit_pulses;
-    if (range > 0)
-    {
-        // Matter: 0% = open (up limit), 100% = closed (down limit)
-        int32_t offset = (int32_t)pulses - blind->up_limit_pulses;
-        if (offset < 0) offset = 0;
-        if (offset > range) offset = range;
-        pct = (uint8_t)(offset * 100 / range);
-    }
-    else
-    {
-        ESP_LOGD(TAG, "No valid limits, reporting raw pulses=%lu", (unsigned long)pulses);
-        pct = 0;
-    }
-
     uint8_t old_pos = blind->current_position;
     blind->current_position = pct;
 
     if (old_pos != pct)
     {
-        ESP_LOGI(TAG, "Position update: %d%% -> %d%% (pulses=%lu, endpoint %d)",
-                 old_pos, pct, (unsigned long)pulses, blind->endpoint);
+        ESP_LOGI(TAG, "Position update: %d%% -> %d%% (pulses=%u, endpoint %d)",
+                 old_pos, pct, pulses, blind->endpoint);
         blind->stall_count = 0;
     }
 

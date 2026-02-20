@@ -121,7 +121,11 @@ The HX711 module has extra complexity:
 6. GET_MOTOR_POSITION → initial position
 7. Falls back to broadcast position query if formal discovery fails
 
-**Position tracking:** Motor reports position in pulses (LE 24-bit). Percentage = pulses * 100 / down_limit_pulses. FreeRTOS task polls every 2s (idle) or 500ms (during movement).
+**Data payload byte order:** Multi-byte values in SDN data payloads are little-endian. Checksum is big-endian.
+
+**POST_MOTOR_POS response data:** data[0-1] = LE 16-bit pulse position, data[2] = percentage (0-100, 0=open, 100=closed). The percentage byte is used directly — no pulse-to-percentage conversion needed.
+
+**Position tracking:** FreeRTOS task polls every 60s (idle) or 100ms (during movement), using task notifications for immediate wake on new commands.
 
 ## app_reset/ Component
 
