@@ -42,6 +42,7 @@ Every feature module follows the same structure:
 | `app_sensor` | OccupancySensing / BooleanState | GPIO input | `[O\|G][I]<pin>[:<output>]` |
 | `app_hx711` | PressureMeasurement | GPIO (SCK+DOUT) | `<sck>:<dout>[:<scale>]` |
 | `app_a01nyub` | PressureMeasurement | UART | `<uart>:<tx>:<rx>` |
+| `app_sdn` | WindowCovering | UART (RS485) | Single motor address via Kconfig |
 | `app_matter` | - (callbacks) | - | N/A |
 
 ### Config String Prefixes
@@ -64,7 +65,7 @@ Every feature module follows the same structure:
 
 This file routes Matter framework callbacks to feature-specific handlers:
 - `app_event_cb()` - Device events (WiFi, commissioning). Calls `sync_*_states()` on WiFi connect.
-- `app_attribute_update_cb()` - Attribute changes from controllers. Delegates to `onoff_attribute_update_cb()` and `hx711_matter_attribute_update_cb()`.
+- `app_attribute_update_cb()` - Attribute changes from controllers. Delegates to `onoff_attribute_update_cb()`, `hx711_matter_attribute_update_cb()`, and `sdn_attribute_update_cb()`.
 - `app_identification_cb()` - Identify cluster (currently just logs).
 
 When adding a new feature that needs attribute update callbacks, add the delegation call in `app_attribute_update_cb()`.
@@ -84,6 +85,43 @@ The HX711 module has extra complexity:
 - Frame protocol: 4-byte frames with 0xFF header and checksum
 - Uses FreeRTOS task for polling
 - Two modes: processed (steadier, 250ms) and real-time (faster, 150ms)
+
+### SDN Blinds Details
+
+- Controls Somfy Sonesse 40 motors via SDN (Somfy Digital Network) protocol over RS485
+- Uses a TTL-to-RS485 adapter with auto direction control (no RTS/DE pin — just VCC, GND, TXD, RXD)
+- UART at 4800 baud, 8-O-1
+- Matter WindowCovering with Lift + Position Aware Lift features (Roller Shade type)
+- Maps Matter Percent100ths (0-10000) to SDN percentage (0-100)
+
+**Wire encoding:**
+- Raw frame = logical bytes with human-readable field values
+- Bus frame (on wire) = every byte EXCEPT the 2-byte checksum is bitwise inverted (`~byte`)
+- Checksum = sum of all inverted (bus) bytes excluding checksum itself, big-endian, appended UN-inverted
+
+**Frame structure (raw, before inversion):**
+```
+[0]     Message ID
+[1]     Length (bits 0-6) | directed flag (bit 7)
+[2]     Network byte (0xF9=tool→motor, 0xF0=broadcast, 0x9F=motor→tool)
+[3-5]   Source address (byte-reversed from display format)
+[6-8]   Destination address (byte-reversed from display format)
+[9..n-2] Data payload (variable)
+[n-1,n]  Checksum (2 bytes, big-endian)
+```
+
+**Key message IDs (raw):** CTRL_MOVETO=0x03, CTRL_STOP=0x02, GET_MOTOR_POS=0x0C, POST_MOTOR_POS=0x0D, GET_MOTOR_LIMITS=0x21, SET_NODE_DISC=0x50, GET_NODE_ADDR=0x40, ACK=0x7F, nACK=0x6F
+
+**Discovery sequence:**
+1. SET_NODE_DISCOVERY data=0x00 (broadcast) — enter discovery mode
+2. GET_NODE_ADDR (broadcast) — poll for motor addresses
+3. SET_NODE_DISCOVERY data=0x01 (to motor) — acknowledge
+4. SET_NODE_DISCOVERY data=0x00 (broadcast) — end discovery mode
+5. GET_MOTOR_LIMITS → stores down_limit_pulses for percentage calculation
+6. GET_MOTOR_POSITION → initial position
+7. Falls back to broadcast position query if formal discovery fails
+
+**Position tracking:** Motor reports position in pulses (LE 24-bit). Percentage = pulses * 100 / down_limit_pulses. FreeRTOS task polls every 2s (idle) or 500ms (during movement).
 
 ## app_reset/ Component
 

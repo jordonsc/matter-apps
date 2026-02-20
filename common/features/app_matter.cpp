@@ -12,6 +12,10 @@
 #include "app_hx711.h"
 #endif
 
+#if CONFIG_APP_SDN_ENABLED
+#include "app_sdn.h"
+#endif
+
 static const char *TAG = "app_matter";
 
 using namespace esp_matter;
@@ -103,6 +107,14 @@ esp_err_t app_attribute_update_cb(
     esp_err_t hx711_err = hx711_matter_attribute_update_cb(endpoint_id, cluster_id, attribute_id, val);
     if (hx711_err != ESP_OK) {
         return hx711_err;
+    }
+#endif
+
+#if CONFIG_APP_SDN_ENABLED
+    // Handle SDN blind attribute updates (WindowCovering target position)
+    esp_err_t sdn_err = sdn_attribute_update_cb(endpoint_id, cluster_id, attribute_id, val);
+    if (sdn_err != ESP_OK) {
+        return sdn_err;
     }
 #endif
 

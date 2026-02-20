@@ -44,6 +44,7 @@ All under the `Omni` menu in menuconfig. Each feature has an enable toggle and a
 | Sensor | `APP_SENSOR_ENABLED` (default: n) | `SENSOR_GPIO_LIST` | `O34` |
 | HX711 | `APP_HX711_ENABLED` (default: n) | `HX711_GPIO_LIST`, `HX711_READING_INTERVAL_MS` | `2:4`, 1000ms |
 | A01NYUB | `APP_A01NYUB_ENABLED` (default: n) | `A01NYUB_UART_LIST`, `A01NYUB_BAUD_RATE`, `A01NYUB_MODE` | `1:5:15`, 9600, mode 1 |
+| SDN Blinds | `APP_SDN_ENABLED` (default: n) | `SDN_UART_NUM`, `SDN_TX_PIN`, `SDN_RX_PIN`, `SDN_POLL_INTERVAL_MS` | UART1, TX:16, RX:17, 2000ms |
 
 See `common/CLAUDE.md` for config string format details.
 

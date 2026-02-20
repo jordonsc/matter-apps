@@ -48,6 +48,11 @@
 #include <app_a01nyub.h>
 #endif
 
+#if CONFIG_APP_SDN_ENABLED
+// SDN Blinds (Somfy RS485) handling
+#include <app_sdn.h>
+#endif
+
 
 static const char *TAG = "app_main";
 
@@ -99,6 +104,11 @@ extern "C" void app_main()
 #if CONFIG_APP_A01NYUB_ENABLED
     // Create A01NYUB ultrasonic sensor endpoints
     create_application_a01nyub_sensors(node);
+#endif
+
+#if CONFIG_APP_SDN_ENABLED
+    // Create SDN blind endpoints (Somfy RS485)
+    create_application_sdn_blinds(node);
 #endif
 
 #if CHIP_DEVICE_CONFIG_ENABLE_THREAD

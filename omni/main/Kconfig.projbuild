@@ -168,4 +168,49 @@ menu "Omni"
 
 	endmenu
 
+	menu "SDN Blinds"
+		config APP_SDN_ENABLED
+			bool "SDN Blinds feature enabled"
+			default n
+			help
+				Enables Somfy SDN (RS485) blind control via Matter WindowCovering.
+				Controls Somfy Sonesse motors over the SDN bus using a TTL-to-RS485
+				adapter with auto direction control (no RTS/DE pin needed).
+				The first motor discovered on the bus is used automatically.
+
+		config SDN_UART_NUM
+			depends on APP_SDN_ENABLED
+			int "UART port number"
+			default 1
+			range 0 2
+			help
+				UART port number for the RS485 transceiver.
+
+		config SDN_TX_PIN
+			depends on APP_SDN_ENABLED
+			int "UART TX GPIO pin"
+			default 16
+			range 0 50
+			help
+				GPIO pin connected to the RS485 transceiver TXD.
+
+		config SDN_RX_PIN
+			depends on APP_SDN_ENABLED
+			int "UART RX GPIO pin"
+			default 17
+			range 0 50
+			help
+				GPIO pin connected to the RS485 transceiver RXD.
+
+		config SDN_POLL_INTERVAL_MS
+			depends on APP_SDN_ENABLED
+			int "Position poll interval (ms)"
+			default 2000
+			range 500 30000
+			help
+				How often to query the motor for its current position when idle.
+				During movement, polling runs at 500ms regardless of this setting.
+
+	endmenu
+
 endmenu
